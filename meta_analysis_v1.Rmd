@@ -1,0 +1,322 @@
+---
+title: "lit_review"
+author: "Moeka"
+date: "2023-10-09"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(ggplot2)
+library(parsedate)
+library(tidyr)
+library(dplyr)
+library(broom)
+library(gridExtra)
+library(stringr)
+library(data.table)
+library(forestmangr)
+library(googlesheets4)
+library(ggpubr)
+```
+
+```{r read & clean dataset}
+lit_raw <- 
+  readxl::read_xlsx("G:/My Drive/Research/Projects/lit_review/lit_review_2025.xlsx", sheet = "data_LRR")
+
+summary(lit_raw)
+
+# numeric values
+lit <- 
+  lit_raw %>%
+  mutate(across(MAT:MAP, as.numeric)) %>% 
+  mutate(across(SR:MBN, as.numeric)) 
+```
+
+```{r}
+
+tally_summary <- 
+  function(var1, var2, df){
+    output <- 
+      df %>% 
+      select({{ var1 }}, {{ var2 }}) %>%
+      filter(!is.na({{ var1 }})) %>%
+      group_by({{ var2 }}) %>%
+      tally()
+    return(output)
+  }
+
+```
+
+```{r}
+# overall - SR components
+SRs <- 
+  lit %>% 
+  select(SR:Ra) %>% 
+  gather() 
+
+SRs_summary <- tally_summary(value, key, SRs)
+
+SRs %>% 
+  ggplot(aes(x = key, y = value))+
+  geom_boxplot() +
+  theme_bw() +
+  geom_hline(yintercept = 0, color = "black", size = 1.5, alpha = 0.4) +
+  geom_text(SRs_summary, mapping = aes(key, Inf, label = n), vjust = 1) + 
+  theme(
+    axis.text.x= element_text(size = 15),
+    axis.title.x = element_blank(),
+    axis.text.y= element_text(size = 15), 
+    axis.title.y = element_blank()
+    )
+  
+lit %>% group_by(Climate_zone) %>% tally()  
+mng_summary <- 
+  lit %>% select(SR, Management_type) %>% 
+  filter(!is.na(SR)) %>% 
+  group_by(Management_type) %>% 
+  tally()  
+
+# SR
+ggplot(lit) +
+  geom_boxplot(aes(Management_type, SR)) +
+  geom_hline(yintercept = 0, color = "black", size = 1.5, alpha = 0.4) + 
+  theme_bw() + 
+  geom_text(
+    tally_summary(SR, Management_type, lit), 
+    mapping = aes(Management_type, Inf, label = n), 
+    vjust = 1
+    ) + 
+  theme(
+    axis.title.x = element_blank(),
+    axis.text.x = element_text(size = 15),
+    axis.title.y = element_text(size = 15),
+    axis.text.y = element_text(size = 15), 
+    legend.position = "none"
+    ) + 
+  ylab(expression("LRR"["SR"]))
+
+# Rh
+ggplot(lit) +
+  geom_boxplot(aes(Management_type, Rh)) +
+  geom_hline(yintercept = 0, color = "black", size = 1.5, alpha = 0.4) + 
+  theme_bw() + 
+  geom_text(
+    tally_summary(Rh, Management_type, lit), 
+    mapping = aes(Management_type, Inf, label = n), 
+    vjust = 1
+    ) + 
+  theme(
+    axis.title.x = element_blank(),
+    axis.text.x = element_text(size = 15),
+    axis.title.y = element_text(size = 15),
+    axis.text.y = element_text(size = 15), 
+    legend.position="none"
+    ) + 
+  ylab(expression("LRR"["Rh"]))
+
+# Ra
+ggplot(lit) +
+  geom_boxplot(aes(Management_type, Ra)) +
+  geom_hline(yintercept = 0, color = "black", size = 1.5, alpha = 0.4) + 
+  theme_bw() + 
+  geom_text(
+    tally_summary(Ra, Management_type, lit), 
+    mapping = aes(Management_type, Inf, label = n), 
+    vjust = 1
+    ) + 
+  theme(
+    axis.title.x = element_blank(),
+    axis.text.x = element_text(size = 15),
+    axis.title.y = element_text(size = 15),
+    axis.text.y = element_text(size = 15), 
+    legend.position="none"
+    ) + 
+  ylab(expression("LRR"["Ra"]))
+
+# management type
+
+
+p_clm <- ggplot(lit) + geom_boxplot(aes(Climate, LRR_SR, col = Climate)) + 
+  geom_hline(yintercept=0, color="black", size=1.5, alpha=0.4) + theme_bw() + 
+  geom_text(lit_climate_summary, mapping = aes(Climate, Inf, label = n), vjust = 1) + 
+  theme(axis.title.x = element_blank(),axis.text.x = element_text(size = 15),
+  axis.title.y = element_text(size = 15),axis.text.y = element_text(size = 15), legend.position="none") + 
+  ylab(expression("LRR"["SR"]))
+
+
+lit_fire_summary <- 
+  lit %>% group_by(Fire_Type) %>% tally()  
+
+p_fire <- ggplot(lit) + geom_boxplot(aes(Fire_Type, LRR_SR, col = Fire_Type)) + 
+  geom_hline(yintercept=0, color="black", size=1.5, alpha=0.4)+ theme_bw() + 
+  geom_text(lit_fire_summary, mapping = aes(Fire_Type, Inf, label = n), vjust = 1)+ 
+  theme(axis.title.x = element_blank(),axis.text.x = element_text(size = 15),
+  axis.title.y = element_text(size = 15),axis.text.y = element_text(size = 15), legend.position="none") + 
+  ylab(expression("LRR"["SR"]))
+
+
+ggplot(lit) + geom_point(aes(time_num, LRR_SR, col = Fire_Type))
+
+
+
+lit_yr <- lit %>%
+  select(Climate, Fire_Type, time_num, LRR_SR) %>%
+  mutate(group = cut(time_num, breaks = c(0, 3, 5, 10, 20, Inf),
+       labels = c("0-3", "3-5", "5-10", "10-20", "20 +"))) 
+
+lit_yr_summary <- 
+  lit_yr %>% group_by(group) %>% tally()  
+
+p_yr <- ggplot() + 
+  geom_boxplot(lit_yr, mapping = aes(group, LRR_SR, col = group)) + 
+  geom_text(lit_yr_summary, mapping = aes(group, Inf, label = n), vjust = 1) + 
+  geom_hline(yintercept=0, color="black", size=1.5, alpha=0.4)+ theme_bw() + 
+  theme(axis.title.x = element_text(size = 15),axis.text.x = element_text(size = 15),
+  axis.title.y = element_text(size = 15),axis.text.y = element_text(size = 15), legend.position="none") + 
+  ylab(expression("LRR"["SR"])) + xlab("Time since fire (yr)")
+
+
+ggarrange(p_basic, p_clm, p_fire, ncol = 2, nrow= 2)
+```
+
+```{r}
+mean_ci <- function(vars) {
+    vars <- vars[!is.na(vars)]
+    mn <- mean(vars)
+    se <- sd(vars) / sqrt(length(vars))
+    tibble(
+        mean = mn,
+        sd = sd(vars),
+        se = se,
+        lower = mn - qt(1 - (0.05 / 2), length(vars) - 1) * se,
+        upper = mn + qt(1 - (0.05 / 2), length(vars) - 1) * se
+    )
+}
+
+lit %>% filter(Climate == "Temperate") %>% summarize(mean_ci(LRR_SR))
+
+t.test(lit[lit$Climate == "Subtropical", 42]) # SR
+
+lit %>% filter(!is.na(LRR_RH)) %>% group_by(Climate) %>% count()
+```
+
+```{r ANOVA}
+t.test(lit$LRR_SR)
+
+lm(LRR_SR ~ Climate, data = lit) %>% summary()
+aov(LRR_SR ~ Climate, data = lit) %>% TukeyHSD(conf.level=.95) 
+
+lm(LRR_SR ~ Fire_Type, data = lit) %>% summary()
+aov(LRR_SR ~ Fire_Type, data = lit) %>% TukeyHSD(conf.level=.95) 
+
+lm(LRR_SR ~ group, data = lit_yr) %>% summary()
+aov(LRR_SR ~ group, data = lit_yr) %>% TukeyHSD(conf.level=.95) 
+```
+
+
+
+```{r}
+lit_summary <- 
+  read_sheet("https://docs.google.com/spreadsheets/d/1HZtf_7_yzjpiXloAK0SB5SyvmCt-m2X3P_hGwQVpXlg/edit#gid=0")
+
+lit_summary <- 
+  lit_summary %>% 
+  mutate(name = 
+           ifelse(category != "PB", 
+                    paste0(stringr::str_to_title(category)," (",n,")"),
+                    paste0(category," (",n,")")))
+name_SR_order = c("Unknown (5)","Wildfire (46)","PB (29)","Tropical (5)","Subtropical (11)",
+                  "Temperate (21)","Mediterranean (18)","Boreal (25)","Overall (79)" )
+
+p_LRR_SR <-
+  lit_summary %>% filter(value == "LRR_SR") %>%
+  ggplot() + geom_point(aes(x=factor(name, level = name_SR_order), mean), size = 5) + 
+  geom_errorbar(aes(x=factor(name, level = name_SR_order), ymin=lower, ymax=upper),lwd=1.5, width=.2) +
+  geom_hline(yintercept=0, color="black", size=1.5, alpha=0.4)+ theme_bw() +
+  coord_flip() + ylab(expression("LRR"["SR"])) + 
+  theme(axis.title.x = element_text(size = 15),axis.text.x = element_text(size = 15),
+  axis.title.y = element_blank(),axis.text.y = element_text(size = 15)) 
+
+name_RH_order = c("Wildfire (12)","PB (6)","Tropical (2)","Subtropical (6)",
+                  "Temperate (4)","Mediterranean (2)","Boreal (4)","Overall (18)" )
+
+p_LRR_RH <-
+  lit_summary %>% filter(value == "LRR_RH") %>%
+  ggplot() + geom_point(aes(x=factor(name, level = name_RH_order), mean), size = 5) + 
+  geom_errorbar(aes(x=factor(name, level = name_RH_order), ymin=lower, ymax=upper),lwd=1.5, width=.2) +
+  geom_hline(yintercept=0, color="black", size=1.5, alpha=0.4)+ theme_bw() +
+  coord_flip() + ylab(expression("LRR"["Rh"])) + 
+  theme(axis.title.x = element_text(size = 15),axis.text.x = element_text(size = 15),
+  axis.title.y = element_blank(),axis.text.y = element_text(size = 15)) 
+  
+ggarrange(p_LRR_SR, p_LRR_RH, nrow = 1)
+```
+
+
+```{r}
+ggplot(lit) + geom_point(aes(time_num, LRR_SR, col = Climate),size = 1.8,alpha =.8) +
+  geom_hline(yintercept=0, color="black", size=1.5, alpha=0.4)+ theme_bw() +
+  theme(axis.title.x = element_text(size = 15),axis.text.x = element_text(size = 15),
+  axis.title.y = element_text(size = 15),axis.text.y = element_text(size = 15),
+  legend.title = element_text(size = 15),legend.text = element_text(size = 15)) + 
+  xlab("Time since fire (yr)")+ ylab(expression("LRR"["SR"])) 
+
+
+ggplot(lit) + geom_point(aes(time_num, LRR_SR, col = Climate),size = 1.8,alpha =.8) +
+    ggpmisc::stat_poly_line(aes(time_num, LRR_SR, col = Climate))+
+  geom_hline(yintercept=0, color="black", size=1.5, alpha=0.4)+ theme_bw() +
+  theme(axis.title.x = element_text(size = 15),axis.text.x = element_text(size = 15),
+  axis.title.y = element_text(size = 15),axis.text.y = element_text(size = 15),
+  legend.title = element_text(size = 15),legend.text = element_text(size = 15)) + 
+  xlab("Time since fire (yr)")+ ylab(expression("LRR"["SR"])) 
+
+ggplot(lit) + geom_point(aes(time_num, LRR_SR, col = Fire_Type),size = 1.8,alpha =.8) +
+    ggpmisc::stat_poly_line(aes(time_num, LRR_SR, col = Fire_Type))+
+  geom_hline(yintercept=0, color="black", size=1.5, alpha=0.4)+ theme_bw() +
+  theme(axis.title.x = element_text(size = 15),axis.text.x = element_text(size = 15),
+  axis.title.y = element_text(size = 15),axis.text.y = element_text(size = 15),
+  legend.title = element_text(size = 15),legend.text = element_text(size = 15)) + 
+  xlab("Time since fire (yr)")+ ylab(expression("LRR"["SR"])) 
+
+# removing the 80yo forest
+ggplot(subset(lit, time_num < 60)) + 
+  geom_point(aes(time_num, LRR_SR, col = Fire_Type),size = 1.8,alpha =.8) +
+  ggpmisc::stat_poly_line(aes(time_num, LRR_SR, col = Fire_Type))+
+  geom_hline(yintercept=0, color="black", size=1.5, alpha=0.4)+ theme_bw() +
+  theme(axis.title.x = element_text(size = 15),axis.text.x = element_text(size = 15),
+  axis.title.y = element_text(size = 15),axis.text.y = element_text(size = 15),
+  legend.title = element_text(size = 15),legend.text = element_text(size = 15)) + 
+  xlab("Time since fire (yr)")+ ylab(expression("LRR"["SR"])) 
+
+ggplot(lit) + geom_point(aes(time_num, LRR_RH, col = Fire_Type),size = 1.8,alpha =.8) +
+    ggpmisc::stat_poly_line(aes(time_num, LRR_RH, col = Fire_Type))+
+  geom_hline(yintercept=0, color="black", size=1.5, alpha=0.4)+ theme_bw() +
+  theme(axis.title.x = element_text(size = 15),axis.text.x = element_text(size = 15),
+  axis.title.y = element_text(size = 15),axis.text.y = element_text(size = 15),
+  legend.title = element_text(size = 15),legend.text = element_text(size = 15)) + 
+  xlab("Time since fire (yr)")+ ylab(expression("LRR"["RH"])) 
+```
+
+
+```{r}
+
+#ref:: https://search.r-project.org/CRAN/refmans/forestmangr/html/lm_table.html
+fit <- forestmangr::lm_table(lit,LRR_SR ~ log(time_num),"Fire_Type", output = "merge_est")
+
+
+lm_table(lit,LRR_SR ~ log(time_num),"Fire_Type")
+
+ggplot(fit) + 
+  geom_point(aes(x=time_num, y=LRR_SR, col = Fire_Type), size =1.5, alpha = .8) + 
+  geom_line(aes(x=time_num, y=est, col = Fire_Type), size = 1.5, alpha = .4) +
+  geom_hline(yintercept=0, color="black", size=1.5, alpha=0.4)+ theme_bw() +
+  theme(axis.title.x = element_text(size = 15),axis.text.x = element_text(size = 15),
+  axis.title.y = element_text(size = 15),axis.text.y = element_text(size = 15),
+  legend.title = element_text(size = 15),legend.text = element_text(size = 15)) + 
+  xlab("Time since fire (yr)")+ ylab(expression("LRR"["SR"])) 
+
+
+
+```
