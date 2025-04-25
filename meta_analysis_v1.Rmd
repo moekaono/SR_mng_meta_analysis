@@ -34,7 +34,7 @@ lit <-
   mutate(across(SR:MBN, as.numeric)) 
 ```
 
-```{r}
+```{r FUNCTION}
 
 tally_summary <- 
   function(var1, var2, df){
@@ -73,7 +73,8 @@ SRs %>%
   
 lit %>% group_by(Climate_zone) %>% tally()  
 mng_summary <- 
-  lit %>% select(SR, Management_type) %>% 
+  lit %>% 
+  select(SR, Management_type) %>% 
   filter(!is.na(SR)) %>% 
   group_by(Management_type) %>% 
   tally()  
@@ -112,7 +113,7 @@ ggplot(lit) +
     axis.text.x = element_text(size = 15),
     axis.title.y = element_text(size = 15),
     axis.text.y = element_text(size = 15), 
-    legend.position="none"
+    legend.position = "none"
     ) + 
   ylab(expression("LRR"["Rh"]))
 
@@ -131,12 +132,68 @@ ggplot(lit) +
     axis.text.x = element_text(size = 15),
     axis.title.y = element_text(size = 15),
     axis.text.y = element_text(size = 15), 
-    legend.position="none"
+    legend.position = "none"
     ) + 
   ylab(expression("LRR"["Ra"]))
 
 # management type
+```
 
+
+```{r LLN res vs LLN env}
+res_vars <- c("SR", "Rh", "Ra")
+var_vars <- colnames(lit)[20:44]
+
+# Iterate through each res variable and plot against each var variable
+for (res in res_vars) {
+  plot_list <- lapply(var_vars, function(var) {
+    ggplot(lit, aes_string(x = var, y = res, color = "Management_type")) +
+      geom_point() +
+      geom_smooth(method = "lm", se = F, aes_string(group = "Management_type", color = "Management_type")) +
+      labs(title = paste(res, "vs", var), x = var, y = res) +
+      theme_minimal() +
+      geom_hline(yintercept = 0, color = "black", size = 1, alpha = 0.4, linetype = 'dotted') +
+      theme(legend.position = "none")
+  })
+  
+  # Combine plots for each res variable
+  gridExtra::grid.arrange(grobs = plot_list, ncol = round(sqrt(length(var_vars))), 
+                          top = paste("Relationships for", res))
+}
+
+
+
+```
+
+```{r time since practices}
+
+# Iterate through each res variable and plot against each var variable
+plot_list <- list()
+
+# Loop through each variable in res_vars
+for (res in res_vars) {
+  p <- ggplot(lit, aes(x = Time_since, y = .data[[res]], color = Management_type)) +
+    geom_point() +
+    #geom_smooth(formula = y ~ exp(x), se = FALSE, aes(group = Management_type, color = Management_type)) +
+    ggpmisc::stat_poly_line() +
+    geom_hline(yintercept = 0, color = "black", size = 1, alpha = 0.4, linetype = 'dotted') +
+    theme_minimal() +
+    theme(legend.position = "right")
+  
+  # Store the plot in the list
+  plot_list[[res]] <- p
+}
+
+# Combine plots into a grid
+gridExtra::grid.arrange(grobs = plot_list, ncol = 3, 
+                        top = "Relationships between Time since and Response Variables")
+
+
+
+```
+
+
+```{r}
 
 p_clm <- ggplot(lit) + geom_boxplot(aes(Climate, LRR_SR, col = Climate)) + 
   geom_hline(yintercept=0, color="black", size=1.5, alpha=0.4) + theme_bw() + 

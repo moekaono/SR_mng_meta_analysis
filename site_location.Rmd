@@ -1,0 +1,51 @@
+---
+title: "Lit_review"
+author: "Moeka"
+date: "2023-07-18"
+output: html_document
+---
+
+```{r}
+library(ggplot2)
+library(maps)
+library(tidyverse)
+library(cowplot)
+```
+
+
+REF: https://datavizpyr.com/how-to-make-world-map-with-ggplot2-in-r/#google_vignette
+
+```{r distribution of studies}
+lit_raw <- 
+  readxl::read_xlsx("G:/My Drive/Research/Projects/lit_review/lit_review_2025.xlsx", sheet = "data_LRR")
+  
+# create data for world coordinates using 
+# map_data() function
+world <- map_data("world")
+
+world_map <- 
+  ggplot() +
+  borders("world", colour = "gray40", fill = "gray80") +
+  theme_map() +
+  coord_cartesian(ylim = c(-50, 90))  
+  
+world_map + geom_point(
+    data = lit, 
+    aes(Longtitude, Latitude, color = Management_type), 
+    alpha = 0.6, size = 3
+    ) + 
+  #ggtitle("Study Site Locations in the meta analysis")+
+  theme_bw() +
+  theme(
+    axis.title.x = element_blank(),
+    axis.text.x = element_text(size =20),
+    axis.title.y = element_blank(),
+    axis.text.y = element_text(size = 20),
+    title = element_text(size = 20),
+    legend.title = element_blank(),
+    legend.text = element_text(size = 20), 
+    legend.position = c(0.1, 0.4)
+    ) 
+
+```
+
