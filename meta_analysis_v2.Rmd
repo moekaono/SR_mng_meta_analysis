@@ -1,0 +1,1681 @@
+---
+title: "lit_review"
+author: "Moeka"
+date: "2023-10-09"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(ggplot2)
+library(ggpmisc)
+
+library(tidyr)
+library(dplyr)
+library(broom)
+library(gridExtra)
+library(stringr)
+library(data.table)
+library(forestmangr)
+library(googlesheets4)
+library(ggpubr)
+
+library(rJava)
+library(glmulti)
+library(metafor)
+
+library(purrr)
+library(lme4)
+library(patchwork)
+library(stringr)
+
+library(rlang)
+```
+
+```{r read & clean dataset}
+lit_raw <- 
+  readxl::read_xlsx("G:/My Drive/Research/Projects/lit_review/data/lit_review_2025.xlsx", sheet = "data_raw")
+
+summary(lit_raw)
+
+# numeric values
+lit <- 
+  lit_raw %>%
+  mutate(across(Latitude:MAP, as.numeric)) %>% 
+  mutate(across(C_rep_n:T_BGB, as.numeric)) %>% 
+  mutate(Wt = T_rep_n * C_rep_n / (T_rep_n + C_rep_n))
+
+summary(lit)
+
+# for SD
+lit %>% 
+  select(where(is.numeric)) %>% 
+  summarise(across(everything(), ~ sd(.x, na.rm = T))) %>% 
+  View()
+```
+
+
+```{r Effect size}
+# Identify treatment columns excluding "T_rep_n"
+treatment_cols <- setdiff(grep("^T_", names(lit), value = TRUE), "T_rep_n")
+
+# Compute log effect size
+lit_effect <- lit %>%
+  mutate(across(all_of(treatment_cols), 
+                ~ log(. / lit[[sub("T_", "C_", cur_column())]]), 
+                .names = "ln_{.col}")) %>%
+  rename_with(~ sub("^ln_T_", "ln_", .), starts_with("ln_T_")) %>%
+  mutate(across(starts_with("ln_"), ~ replace(., is.infinite(.), NA)))
+
+#write.csv(lit_effect, "G:/My Drive/Research/Projects/lit_review/Data/Ln_RR_raw.csv", row.names = F)
+```
+
+```{r mixed effects model for vars}
+# Management type
+CC <- lit_effect %>% filter(Management_type == "Clearcut")
+PC <- lit_effect %>% filter(Management_type == "Partial cut")
+PB <- lit_effect %>% filter(Management_type == "Prescribed burn")
+TH <- lit_effect %>% filter(Management_type == "Thinning")
+
+
+run_boot_lmer <- function(data, response_var) {
+  # Remove NA/NaN/Inf from response before modeling
+  data_clean <- data %>%
+    filter(!is.na(.data[[response_var]]),
+           is.finite(.data[[response_var]]))
+
+  # Compute study and observation counts
+  n_study <- data_clean %>% pull(ID) %>% n_distinct()
+  n_obs <- nrow(data_clean)
+
+  # Initialize result with NAs
+  result <- data.frame(
+    Response = response_var,
+    Management = unique(data$Management_type),
+    n_study = n_study,
+    n_obs = n_obs,
+    Intercept = NA_real_,
+    Intercept_Lower = NA_real_,
+    Intercept_Upper = NA_real_,
+    Random_SD_Lower = NA_real_,
+    Random_SD_Upper = NA_real_,
+    Residual_SD_Lower = NA_real_,
+    Residual_SD_Upper = NA_real_
+  )
+
+  # Only run model if enough studies
+  if (n_study > 1) {
+    tryCatch({
+      model <- lmer(
+        as.formula(paste(response_var, "~ 1 + (1|ID)")),
+        weights = Wt,
+        data = data_clean
+      )
+      
+      ci <- suppressMessages(confint(model, method = "boot", level = 0.95))
+      intercept <- fixef(model)["(Intercept)"]
+      
+      result$Intercept <- intercept
+      result$Intercept_Lower <- ci["(Intercept)", 1]
+      result$Intercept_Upper <- ci["(Intercept)", 2]
+      result$Random_SD_Lower <- ci[".sig01", 1]
+      result$Random_SD_Upper <- ci[".sig01", 2]
+      result$Residual_SD_Lower <- ci[".sigma", 1]
+      result$Residual_SD_Upper <- ci[".sigma", 2]
+    }, error = function(e) {
+      message(paste("Model failed for", response_var, "-", e$message))
+    })
+  } else {
+    message(paste("Skipping model for", response_var, "- not enough studies (n_study =", n_study, ")"))
+  }
+
+  return(result)
+}
+
+
+# Run function for each management type and response variable
+Mng_types <- list(CC = CC, PC = PC, PB = PB, TH = TH)
+
+Response_vars <- 
+  lit_effect %>% 
+  select(starts_with("ln_")) %>% 
+  colnames() %>%
+  setdiff(c("ln_Clay", "ln_Silt", "ln_Sand", "ln_DOC", "ln_DON"))  # only few studies reported these
+
+
+results_list <- list()
+for(mng in names(Mng_types)){
+  for (resp in Response_vars) {
+    results_list[[paste(mng, resp, sep = "_")]] <- run_boot_lmer(Mng_types[[mng]], resp)
+  }
+}
+  
+summary_table <- 
+  bind_rows(results_list) %>% 
+  mutate(
+    across(Intercept:Intercept_Upper, 
+           ~(exp(1) ^ (.) - 1) * 100,
+           .names = "{.col}_pct_change")
+        )
+  
+#write.csv(summary_table, "G:/My Drive/Research/Projects/lit_review/Data/Ln_RR_summary.csv", row.names = F)
+
+#summary_table <- read.csv("G:/My Drive/Research/Projects/lit_review/Data/Ln_RR_summary.csv")
+```
+
+
+```{r effect size graph}
+
+# Define variable groups
+group_map <- c(
+  "SR" = "Soil Respiration",
+  "Ra" = "Soil Respiration",
+  "Rh" = "Soil Respiration",
+  "Ts" = "Soil Environment",
+  "SM" = "Soil Environment",
+  "BD" = "Soil Environment",
+  "pH" = "Soil Environment",
+  "SOC" = "Soil Environment",
+  "SON" = "Soil Environment",
+  "TC" = "Soil Environment",
+  "TN" = "Soil Environment",
+  "CN" = "Soil Environment",
+  "FRB" = "Biomass",
+  "CRB" = "Biomass",
+  "FRP" = "Biomass",
+  "CRP" = "Biomass",
+  "AGB" = "Biomass",
+  "BGB" = "Biomass",
+  "LAI" = "Biomass",
+  "LF" = "Biomass",
+  "FF" = "Biomass",
+  "MBC" = "Biomass",
+  "MBN" = "Biomass"
+)
+
+# Define factor levels to control y-axis order
+response_levels <- str_remove(rev(Response_vars), "^ln_")
+
+# Step 1: Clean and assign groups
+plot_df <- summary_table %>%
+  filter(n_study > 2) %>%
+  mutate(
+    Response_clean = str_remove(Response, "^ln_"),
+    color_group = case_when(
+      Intercept_Lower_pct_change > 0 & Intercept_Upper_pct_change > 0 ~ "royalblue",
+      Intercept_Lower_pct_change < 0 & Intercept_Upper_pct_change < 0 ~ "red2",
+      TRUE ~ "black"
+    ),
+    background_group = group_map[Response_clean],
+    background_group = ifelse(is.na(background_group), "Other", background_group),
+    Response_clean = factor(Response_clean, levels = response_levels)
+  )
+
+# Step 2: Create row-level shading using ymin/ymax
+rect_df <- plot_df %>%
+  distinct(Response_clean, background_group) %>%
+  mutate(
+    y = as.numeric(Response_clean),
+    ymin = y - 0.5,
+    ymax = y + 0.5,
+    fill = case_when(
+      background_group == "Soil Respiration" ~ "plum",
+      background_group == "Soil Environment" ~ "khaki3",
+      background_group == "Biomass" ~ "lightgreen",
+      TRUE ~ "white"
+    )
+  )
+
+# Step 3: Final plot
+ggplot(plot_df) +
+  # Horizontal background shading
+  geom_rect(
+    data = rect_df,
+    aes(ymin = ymin, ymax = ymax, xmin = -Inf, xmax = Inf, fill = fill),
+    inherit.aes = FALSE,
+    alpha = 0.2
+  ) +
+  geom_point(aes(
+    x = Intercept_pct_change,
+    y = Response_clean,
+    color = color_group
+  ), size = 5) +
+  geom_errorbarh(aes(
+    y = Response_clean,
+    xmin = Intercept_Lower_pct_change,
+    xmax = Intercept_Upper_pct_change,
+    color = color_group
+  ), height = 0.2, linewidth = 1.5) +
+  geom_vline(xintercept = 0, color = "black", size = 1.5, alpha = 0.4) +
+  geom_text(aes(
+    x = Intercept_Upper_pct_change + 20,
+    y = Response_clean,
+    label = paste0(n_obs, " (", n_study, ")")
+  ),
+  vjust = 0.5, size = 4) +
+  scale_color_identity() +
+  scale_fill_identity() +
+  facet_wrap(~ Management, nrow = 1, ncol = 4) +
+  xlab(expression("Effect Size (%)")) +
+  theme_classic2() +
+  theme(
+    axis.title.x = element_text(size = 15),
+    axis.text.x = element_text(size = 15),
+    axis.title.y = element_blank(),
+    axis.text.y = element_text(size = 15),
+    strip.text = element_text(size = 15),
+    panel.border = element_rect(colour = "black", fill = NA, linewidth = 0.1)
+  ) +
+  facet_wrap(~ Management, nrow = 1, ncol = 4)
+
+```
+
+```{r individual difference}
+# under CC, ln_Rh vs ln_Ra
+CC_long <- CC %>%
+    select(ID, Wt, ln_Ra, ln_Rh) %>%
+    pivot_longer(c(ln_Ra, ln_Rh), names_to = "Component", values_to = "ln_value") %>%
+    mutate(Component = factor(Component))
+
+m_diff <- lmerTest::lmer(ln_value ~ Component + (1 | ID), weights = Wt, data = CC_long)
+summary(m_diff) # Intercept shows ln_Ra, Componentln_Rh is the diff
+confint(m_diff)  # gives 95% CI for the Ra vs Rh difference
+
+# PB
+PB_long <- PB %>%
+    select(ID, Wt, ln_Ra, ln_Rh) %>%
+    pivot_longer(c(ln_Ra, ln_Rh), names_to = "Component", values_to = "ln_value") %>%
+    mutate(Component = factor(Component))
+
+m_diff_PB <- lmerTest::lmer(ln_value ~ Component + (1 | ID), weights = Wt, data = PB_long)
+summary(m_diff_PB) # Intercept shows ln_Ra, Componentln_Rh is the diff
+confint(m_diff_PB)  # gives 95% CI for the Ra vs Rh difference
+
+```
+
+What can be added to the predictive models?
+Which models should I use?
+Consider removing redundant vars.
+
+```{r select predictors- missing ratios}
+get_non_na_summary <- function(data, var2) {
+  data %>%
+    select(c(ID:Repeat, starts_with("ln_"))) %>%
+    filter(!is.na(.data[[var2]])) %>%
+    summarise(across(Latitude:ln_BGB, ~ {
+      if (is.character(.)) {
+        100 * sum(is.na(.) | . == "NA") / n()
+      } else {
+        100 * sum(is.na(.)) / n()
+      }
+    }))
+}
+
+vars <- c("ln_SR", "ln_Rh", "ln_Ra")
+
+NA_ratios <- 
+  cross_df(list(Mng = names(Mng_types), LRR = vars)) %>%
+  mutate(summary = map2(Mng_types[Mng], LRR, get_non_na_summary)) %>%
+  unnest(summary) %>% 
+  arrange(Mng)
+
+#write.csv(NA_ratios, "G:/My Drive/Research/Projects/lit_review/Data/NA_ratios.csv", row.names = F)
+```
+
+corr 
+
+```{r test corr basic}
+corr_plt <- function(df, var1, var2){
+  ggplot(df, aes({{var1}}, {{var2}})) +  
+  geom_point() +
+  theme_bw() +
+  geom_smooth(method = lm, se = T) + 
+  stat_poly_eq(use_label(c("eq", "R2", "P")))
+} 
+  
+
+#ggplot(lit_effect) + geom_point(aes(Latitude, Longitude))
+p1 <- corr_plt(lit_effect, Latitude, MAT)
+p2 <- corr_plt(lit_effect, Latitude, MAP)
+p3 <- corr_plt(lit_effect, Longitude, MAT)
+p4 <- corr_plt(lit_effect, Longitude, MAP)
+p5 <- corr_plt(lit_effect, MAT, MAP)
+
+ggarrange(p1, p2, p3, p4, p5)
+
+```
+
+
+Check the NA values. ~40% as thresholds?
+```{r model selection}
+
+prednames <- c("Latitude", "MAT", "MAP",
+               "Climate_zone", "Forest_type", "Leaf_habit",
+               "Time_since", "Severity_level", "Season")
+
+# CC
+res_CC_SR <- 
+  glmulti(
+    "ln_SR", xr = prednames, 
+    data = CC %>% select(all_of(prednames), ln_SR) %>% mutate(across(where(~ !is.numeric(.)), as.factor)), 
+    level = 1,
+    crit = "aicc",
+    plotty = F
+    )
+print(res_CC_SR)
+plot(res_CC_SR, type = "s")
+plot(res_CC_SR)
+
+res_CC_Rh <- 
+  glmulti(
+    "ln_Rh", xr = prednames, 
+    data = CC %>% select(all_of(prednames), ln_Rh) %>% mutate(across(where(~ !is.numeric(.)), as.factor)), 
+    level = 1,
+    crit = "aicc",
+    plotty = F
+    )
+print(res_CC_Rh)
+plot(res_CC_Rh, type = "s")
+plot(res_CC_Rh)
+
+
+res_CC_Ra <- 
+  glmulti(
+    "ln_Ra", xr = prednames, 
+    data = CC %>% select(all_of(prednames), ln_Ra) %>% mutate(across(where(~ !is.numeric(.)), as.factor)), 
+    level = 1,
+    crit = "aicc",
+    plotty = F
+    )
+print(res_CC_Ra)
+plot(res_CC_Ra, type = "s")
+plot(res_CC_Ra)
+
+
+# PB - Rh and Ra are too small sample size
+res_PB_SR <- 
+  glmulti(
+    "ln_SR", xr = c(prednames, "Severity_level", "Repeat"), 
+    data = PB %>% select(all_of(prednames), ln_SR, Severity_level, Repeat) %>% mutate(across(where(~ !is.numeric(.)), as.factor)), 
+    level = 1,
+    crit = "aicc",
+    plotty = F
+    )
+  
+print(res_PB_SR)
+plot(res_PB_SR, type = "s")
+plot(res_PB_SR)
+
+# TH
+res_TH_SR <- 
+  glmulti(
+    "ln_SR", xr = c(prednames, "Severity_level", "Repeat"), 
+    data = TH %>% select(all_of(prednames), ln_SR, Severity_level, Repeat) %>% mutate(across(where(~ !is.numeric(.)), as.factor)), 
+    level = 1,
+    crit = "aicc",
+    plotty = F
+    )
+print(res_TH_SR)
+plot(res_TH_SR, type = "s")
+plot(res_TH_SR)
+
+res_TH_Rh <- 
+  glmulti(
+    "ln_Rh", xr = setdiff(c(prednames, "Severity_level", "Repeat"), "Forest_type"), 
+    data = TH %>% select(all_of(prednames), ln_Rh, Severity_level, Repeat) %>% mutate(across(where(~ !is.numeric(.)), as.factor)), 
+    level = 1,
+    crit = "aicc",
+    plotty = F
+    )
+
+print(res_TH_Rh)
+plot(res_TH_Rh, type = "s")
+plot(res_TH_Rh)
+
+res_TH_Ra <- 
+  glmulti(
+    "ln_Ra", xr = setdiff(c(prednames, "Severity_level", "Repeat"), "Forest_type"), 
+    data = TH %>% select(all_of(prednames), ln_Ra, Severity_level, Repeat) %>% mutate(across(where(~ !is.numeric(.)), as.factor)), 
+    level = 1,
+    crit = "aicc",
+    plotty = F
+    )
+print(res_TH_Ra)
+plot(res_TH_Ra, type = "s")
+plot(res_TH_Ra)
+
+
+```
+
+```{r model selection function}
+summarize_glmulti <- function(glmulti_obj, run_name = NA_character_) {
+    best_model <- glmulti_obj@formulas[[1]]
+    all_ics <- glmulti_obj@crits
+    
+    best_ic <- min(all_ics)
+    
+    data.frame(
+        Run = run_name,
+        Best_Model = paste(deparse(best_model), collapse = ""),
+        Best_IC = best_ic,
+        Mean_IC = mean(all_ics),
+        Min_IC = min(all_ics),
+        Max_IC = max(all_ics),
+        N_models = length(all_ics),
+        N_models_within_2 = sum(all_ics <= best_ic + 2)
+    )
+}
+
+# Create a named list of glmulti results
+glmulti_results <- list(
+  CC_SR = res_CC_SR,
+  CC_Rh = res_CC_Rh,
+  CC_Ra = res_CC_Ra,
+  PB_SR = res_PB_SR,
+  TH_SR = res_TH_SR,
+  TH_Rh = res_TH_Rh,
+  TH_Ra = res_TH_Ra
+)
+
+# Apply summarization function and bind rows
+model_selection_summary <- map_dfr(
+  names(glmulti_results),
+  ~ summarize_glmulti(glmulti_results[[.x]], run_name = .x)
+)
+
+#write.csv(model_selection_summary, "G:/My Drive/Research/Projects/lit_review/Data/model_selection.csv", row.names = F)
+```
+
+```{r}
+library(lmerTest)
+
+anova_result_df <- function(model){
+  
+  a <- anova(model)
+  df <- as.data.frame(
+    a, row.names = make.unique(rownames(a))
+  ) %>% 
+    tibble::rownames_to_column("term")
+  
+  
+  df$model <- deparse(substitute(model))
+  
+  return(df)
+}
+  
+
+#CC_SR
+m_CC_SR <- lmerTest::lmer(
+        ln_SR ~ as.factor(Forest_type) + as.factor(Leaf_habit) + as.factor(Season) + 
+          scale(MAP) + (1|ID),
+        weights = Wt,
+        data = CC
+      )
+summary(m_CC_SR)
+lmer_CC_SR <- anova_result_df(m_CC_SR)
+
+#CC_Rh
+m_CC_Rh <- lmerTest::lmer(
+        ln_Rh ~ as.factor(Leaf_habit) + 
+          scale(Latitude) + scale(MAT) + scale(MAP) + (1|ID),
+        weights = Wt,
+        data = CC
+      )
+summary(m_CC_Rh)
+lmer_CC_Rh <- anova_result_df(m_CC_Rh)
+
+#CC_Ra
+m_CC_Ra <- lmerTest::lmer(
+        ln_Ra ~ as.factor(Forest_type) + as.factor(Leaf_habit) + as.factor(Severity_level) 
+        + scale(MAT) + scale(Time_since) + (1|ID),
+        weights = Wt,
+        data = CC
+      )
+summary(m_CC_Ra)
+lmer_CC_Ra <- anova_result_df(m_CC_Ra)
+
+#PB_SR
+m_PB_SR <- lmerTest::lmer(
+        ln_SR ~ as.factor(Repeat) + (1|ID),
+        weights = Wt,
+        data = PB
+      )
+summary(m_PB_SR)
+lmer_PB_SR <- anova_result_df(m_PB_SR)
+
+
+#TH_SR
+m_TH_SR <- lmerTest::lmer(
+        ln_SR ~ as.factor(Climate_zone) + as.factor(Leaf_habit) + as.factor(Severity_level) + as.factor(Repeat) + 
+          scale(Latitude) + (1|ID),
+        weights = Wt,
+        data = TH
+      )
+summary(m_TH_SR)
+lmer_TH_SR <- anova_result_df(m_TH_SR)
+
+#TH_Rh
+m_TH_Rh <- lmerTest::lmer(
+        ln_Rh ~ as.factor(Climate_zone) + as.factor(Season) + (1|ID),
+        weights = Wt,
+        data = TH
+      )
+summary(m_TH_Rh)
+lmer_TH_Rh <- anova_result_df(m_TH_Rh)
+
+#CC_Ra
+m_TH_Ra <- lmerTest::lmer(
+        ln_Ra ~ as.factor(Climate_zone) + 
+        scale(Latitude)+ scale(MAP) + (1|ID),
+        weights = Wt,
+        data = TH
+      )
+summary(m_TH_Ra)
+lmer_TH_Ra <- anova_result_df(m_TH_Ra)
+
+# combine them all
+lmer_result_summary <- 
+  bind_rows(list(lmer_CC_SR, lmer_CC_Rh, lmer_CC_Ra,
+                 lmer_PB_SR,
+                 lmer_TH_SR, lmer_TH_Rh, lmer_TH_Ra)) %>% 
+  relocate(model)
+
+#xlsx::write.xlsx(lmer_result_summary, "G:/My Drive/Research/Projects/lit_review/Data/lmer_result.xlsx", row.names = F)
+```
+
+
+
+```{r corr every vars}
+env_var <- setdiff(Response_vars, vars)
+management_types <- c("CC", "PC", "PB", "TH")
+
+# CC
+plot_list_CC <- list()
+
+for (res in vars) {
+    for (var in env_var) {
+        plot_name <- paste(res, var, sep = "_vs_")
+        
+        plot_list_CC[[plot_name]] <- ggplot_templete(CC, !!sym(var), !!sym(res))
+    }
+}
+# Break the plot list into 3 groups of 25
+plot_chunks_CC <- split(plot_list_CC, ceiling(seq_along(plot_list_CC) / 25))
+
+# View each page
+for (i in seq_along(plot_chunks_CC)) {
+    print(wrap_plots(plot_chunks_CC[[i]], ncol = 5) + plot_annotation(title = "CC"))
+}
+
+# PB
+plot_list_PB <- list()
+
+for (res in vars) {
+    for (var in env_var) {
+        plot_name <- paste(res, var, sep = "_vs_")
+        
+        plot_list_PB[[plot_name]] <- ggplot_templete(PB, !!sym(var), !!sym(res))
+    }
+}
+# Break the plot list into 3 groups of 25
+plot_chunks_PB <- split(plot_list_PB, ceiling(seq_along(plot_list_PB) / 25))
+
+# View each page
+for (i in seq_along(plot_chunks_PB)) {
+    print(wrap_plots(plot_chunks_PB[[i]], ncol = 5) + plot_annotation(title = "PB"))
+}
+
+
+# TH
+plot_list_TH <- list()
+
+for (res in vars) {
+    for (var in env_var) {
+        plot_name <- paste(res, var, sep = "_vs_")
+        
+        plot_list_TH[[plot_name]] <- ggplot_templete(TH, !!sym(var), !!sym(res))
+    }
+}
+# Break the plot list into 3 groups of 25
+plot_chunks_TH <- split(plot_list_TH, ceiling(seq_along(plot_list_TH) / 25))
+
+# View each page
+for (i in seq_along(plot_chunks_TH)) {
+    print(wrap_plots(plot_chunks_TH[[i]], ncol = 5) + plot_annotation(title = "TH"))
+}
+```
+
+
+```{r corr ind function}
+# Function to prepare plot
+ggplot_responses <- function(data, predictor_var) {
+  # Reshape the data to long format
+  long_data <- data %>%
+    select({{predictor_var}}, ln_SR, ln_Rh, ln_Ra, Wt) %>%
+    pivot_longer(cols = c(ln_SR, ln_Rh, ln_Ra), names_to = "Component", values_to = "lnRR") %>%
+    mutate(Component = factor(Component))
+
+  # Convert predictor variable to string
+  pred_str <- rlang::as_name(rlang::enquo(predictor_var))
+
+  # Get p-values per Component
+  model_info <- long_data %>%
+    group_by(Component) %>%
+    group_modify(~ {
+      model <- lm(reformulate(pred_str, response = "lnRR"), data = .x)
+      tidy(model) %>%
+        filter(term == pred_str) %>%
+        mutate(significant = p.value < 0.05)
+    }) %>%
+    select(Component, p.value, significant)
+
+  # Join significance info back to the data
+  long_data <- long_data %>%
+    left_join(model_info, by = "Component")
+
+  # Plot
+  ggplot(long_data, aes(x = .data[[pred_str]], y = lnRR, color = Component, weight = Wt)) +
+    geom_hline(yintercept = 0, color = "black", size = 1.2, alpha = 0.4) +
+    geom_vline(xintercept = 0, color = "black", size = 1.2, alpha = 0.4) +
+    geom_point(aes(size = Wt), shape = 1, stroke = 1.5, alpha = 0.8) +
+    geom_smooth(
+      data = filter(long_data, significant),
+      method = "lm", se = FALSE,
+      aes(group = Component),
+      show.legend = FALSE,
+      size = 1.5
+    ) +
+    stat_poly_eq(
+      data = 
+        filter(long_data, significant) %>% 
+        mutate(label_y = case_when(
+          Component == "ln_SR" ~ 1.5,
+          Component == "ln_Rh" ~ 1.0,
+          Component == "ln_Ra" ~ 0.5
+        )),
+      aes(label = after_stat(
+        paste(eq.label, "*\"  ,  \"~", 
+        adj.rr.label, "*\"  ,  \"~", 
+        p.value.label, sep = ""))
+        ),
+      formula = y ~ x,
+      parse = TRUE,
+      size = 5.5,
+      coef.digits = 2,
+      p.digits = 2,
+      label.x.npc = "right",
+      label.y.npc = "bottom",
+      method = "lm"
+     ) +
+    theme_classic() +
+    scale_color_manual(values = c("ln_SR" = "blue", "ln_Rh" = "tomato", "ln_Ra" = "forestgreen")) +
+    theme(
+      axis.title.x = element_text(size = 20),
+      axis.text.x = element_text(size = 20),
+      axis.title.y = element_text(size = 20),
+      axis.text.y = element_text(size = 20),
+      legend.position = "none",
+      panel.border = element_rect(colour = "black", fill = NA, linewidth = .5)
+    )
+}
+```
+
+```{r corr ind applicatoin}  
+corr_fig_dir <- "G:/My Drive/Research/Projects/lit_review/Fig/corr/"
+
+#CC 
+png(file = paste0(corr_fig_dir, "CC_lnTs.png"), width = 850, height = 640)
+CC_Ts <- ggplot_responses(CC, ln_Ts)
+print(CC_Ts)
+dev.off()
+
+png(file = paste0(corr_fig_dir, "CC_lnSM.png"), width = 530, height = 420)
+CC_SM <- ggplot_responses(CC, ln_SM)
+print(CC_SM)
+dev.off()
+
+png(file = paste0(corr_fig_dir, "CC_lnSOC.png"), width = 530, height = 420)
+CC_SOC <- ggplot_responses(CC, ln_SOC)
+print(CC_SOC)
+dev.off()
+
+png(file = paste0(corr_fig_dir, "CC_lnFRB.png"), width = 530, height = 420)
+CC_FRB <- ggplot_responses(CC, ln_FRB)
+print(CC_FRB)
+dev.off()
+
+
+CC_LF <- ggplot_responses(CC, ln_LF)
+
+png(file = paste0(corr_fig_dir, "CC_lnLAI.png"), width = 530, height = 420)
+CC_LAI <- ggplot_responses(CC, ln_LAI)
+print(CC_LAI)
+dev.off()
+
+png(file = paste0(corr_fig_dir, "CC_lnMBC.png"), width = 530, height = 420)
+CC_MBC <- ggplot_responses(CC, ln_MBC)
+print(CC_MBC)
+dev.off()
+
+CC_TC <- ggplot_responses(CC, ln_TC)
+CC_TN <- ggplot_responses(CC, ln_TN)
+CC_LAI <- ggplot_responses(CC, ln_LAI)
+CC_AGB <- ggplot_responses(CC, ln_AGB)
+
+# TH
+
+png(file = paste0(corr_fig_dir, "TH_lnTs.png"), width = 530, height = 420)
+TH_Ts <- ggplot_responses(TH, ln_Ts)
+print(TH_Ts)
+dev.off()
+
+png(file = paste0(corr_fig_dir, "TH_lnSM.png"), width = 530, height = 420)
+TH_SM <- ggplot_responses(TH, ln_SM)
+print(TH_SM)
+dev.off()
+
+png(file = paste0(corr_fig_dir, "TH_ln_FRB.png"), width = 530, height = 420)
+TH_FRB <- ggplot_responses(TH, ln_FRB)
+print(TH_FRB)
+dev.off()
+
+png(file = paste0(corr_fig_dir, "TH_ln_FF.png"), width = 530, height = 420)
+TH_FF <- ggplot_responses(TH, ln_FF)
+print(TH_FF)
+dev.off()
+
+TH_SOC <- ggplot_responses(TH, ln_SOC)
+TH_LF <- ggplot_responses(TH, ln_LF)
+
+TH_TC <- ggplot_responses(TH, ln_TC)
+TH_TN <- ggplot_responses(TH, ln_TN)
+TH_LAI <- ggplot_responses(TH, ln_LAI)
+TH_AGB <- ggplot_responses(TH, ln_AGB)
+
+# PB
+png(file = paste0(corr_fig_dir, "PB_lnTs.png"), width = 530, height = 420)
+PB_Ts <- ggplot_responses(PB, ln_Ts)
+print(PB_Ts)
+dev.off()
+
+png(file = paste0(corr_fig_dir, "PB_lnSM.png"), width = 530, height = 420)
+PB_SM <- ggplot_responses(PB, ln_SM)
+print(PB_SM)
+dev.off()
+
+png(file = paste0(corr_fig_dir, "PB_ln_FRB.png"), width = 530, height = 420)
+PB_FRB <- ggplot_responses(PB, ln_FRB)
+print(PB_FRB)
+dev.off()
+
+png(file = paste0(corr_fig_dir, "PB_ln_FF.png"), width = 530, height = 420)
+PB_FF <- ggplot_responses(PB, ln_FF)
+print(PB_FF)
+dev.off()
+
+PB_SOC <- ggplot_responses(PB, ln_SOC)
+PB_LF <- ggplot_responses(PB, ln_LF)
+
+PB_TC <- ggplot_responses(PB, ln_TC)
+PB_TN <- ggplot_responses(PB, ln_TN)
+PB_LAI <- ggplot_responses(PB, ln_LAI)
+PB_AGB <- ggplot_responses(PB, ln_AGB)
+
+ggplot_responses(CC %>% filter(Residue == "Y"), ln_SM) + ggtitle("With Residues CC")
+```
+
+From here, comparison in categorical values
+
+```{r categorical comparison ggplot}
+
+cat_compare_plot <- function(df, xvar, xlabel, xlevels = NULL) {
+  df <- df %>%
+    mutate(
+      !!xvar := if (!is.null(xlevels)) factor(.data[[xvar]], levels = xlevels) else .data[[xvar]]
+    )
+
+  ggplot(df) + 
+    geom_point(aes(x = .data[[xvar]], y = Intercept_pct_change), size = 5) + 
+    geom_errorbar(aes(
+      x = .data[[xvar]],
+      ymin = Intercept_Lower_pct_change,
+      ymax = Intercept_Upper_pct_change
+    ), lwd = 1.5, width = .2) +
+    geom_hline(yintercept = 0, color = "black", size = 1.5, alpha = 0.4) +
+    geom_text(aes(
+      x = .data[[xvar]],
+      y = Intercept_Upper_pct_change + 15,
+      label = paste0(n_obs, " (", n_study, ")")
+    ), vjust = .5, size = 4) +
+    theme_classic2() +
+    xlab(xlabel) + ylab("Effect Size (%)") + 
+    theme(
+      axis.title.x = element_text(size = 15),
+      axis.text.x = element_text(size = 15),
+      axis.title.y = element_text(size = 15),
+      axis.text.y = element_text(size = 15),
+      strip.text = element_text(size = 15),
+      panel.border = element_rect(colour = "black", fill = NA, linewidth = .1)
+    )
+}
+
+
+
+```
+
+```{r CC cat comparison}
+# Severity
+CC_Resp_Severity <- list()
+
+# Define severity levels
+CC_Severity <- c(Stem = "S", WT = "WT", WTS = "WTS", WTSC = "WTSC")
+
+# Define respiration components
+Resp_Components <- c("ln_SR", "ln_Rh", "ln_Ra")
+
+# Run boot_lmer for each component and severity level
+for (resp in Resp_Components) {
+    for (var in names(CC_Severity)) {
+        group_name <- paste("CC", resp, var, sep = "_")
+        CC_Resp_Severity[[group_name]] <- run_boot_lmer(
+            CC %>% filter(Severity_level == CC_Severity[[var]]),
+            resp
+        )
+    }
+}
+
+# Bind and process results
+CC_Resp_Severity_results <- 
+    bind_rows(CC_Resp_Severity, .id = "Group") %>% 
+    mutate(
+        Resp = word(Group, 3, sep = "_"),
+        Severity = word(Group, -1, sep = "_")
+    ) %>% 
+    mutate(
+        across(Intercept:Intercept_Upper, 
+               ~ (exp(1)^(.) - 1) * 100,
+               .names = "{.col}_pct_change")
+    )
+
+#write.csv(CC_Resp_Severity_results, "G:/My Drive/Research/Projects/lit_review/Data/CC_severity_result.csv", row.names = F)
+
+# ggplot
+# ggplot
+cat_compare_plot(
+  CC_Resp_Severity_results %>% filter(Response == "ln_SR"),
+  "Severity", "Severity", xlevels = NULL)
+
+CC_severity_SR <- aov(ln_SR ~ Severity_level, data = CC %>% filter(!Severity_level == "High" & !Severity_level == "NA"))
+summary(CC_severity_SR) 
+TukeyHSD(CC_severity_SR)
+
+
+##########
+# Season
+##########
+CC_Resp_Season <- list()
+
+season <- c(Spring = "Spring", Summer = "Summer", Fall = "Fall", Winter = "Winter")
+levels(season) = c("Spring", "Summer", "Fall", "Winter")
+
+for (resp in Resp_Components) {
+    for (var in names(season)) {
+        group_name <- paste("CC", resp, var, sep = "_")
+        CC_Resp_Season[[group_name]] <- run_boot_lmer(
+            CC %>% filter(Season == season[[var]]),
+            resp
+        )
+    }
+}
+
+# Bind and process results
+CC_Resp_Season_results <- 
+    bind_rows(CC_Resp_Season, .id = "Group") %>% 
+    mutate(
+        Resp = word(Group, 3, sep = "_"),
+        Season = word(Group, -1, sep = "_")
+    ) %>% 
+    mutate(
+        across(Intercept:Intercept_Upper, 
+               ~ (exp(1)^(.) - 1) * 100,
+               .names = "{.col}_pct_change")
+    )
+
+#write.csv(CC_Resp_Season_results, "G:/My Drive/Research/Projects/lit_review/Data/CC_Resp_Season_result.csv", row.names = F)
+
+# ggplot
+cat_compare_plot(
+  CC_Resp_Season_results %>% filter(Response == "ln_SR"),
+  "Season", "Season", xlevels = c("Spring", "Summer", "Fall", "Winter"))
+
+CC_season_SR <- aov(ln_SR ~ Season, data = CC %>% filter(Season != "NA"))
+summary(CC_season_SR) 
+TukeyHSD(CC_season_SR)
+
+#########
+# Forest type ##
+########
+
+
+CC_Resp_Forest <- list()
+
+Forest <- c(Broadleaf = "Broadleaf", Needleleaf = "Needleleaf")
+
+for (resp in Resp_Components) {
+    for (var in names(Forest)) {
+        group_name <- paste("CC", resp, var, sep = "_")
+        CC_Resp_Forest[[group_name]] <- run_boot_lmer(
+            CC %>% filter(Forest_type == Forest[[var]]),
+            resp
+        )
+    }
+}
+
+# Bind and process results
+CC_Resp_Forest_results <- 
+    bind_rows(CC_Resp_Forest, .id = "Group") %>% 
+    mutate(
+        Resp = word(Group, 3, sep = "_"),
+        Forest = word(Group, -1, sep = "_")
+    ) %>% 
+    mutate(
+        across(Intercept:Intercept_Upper, 
+               ~ (exp(1)^(.) - 1) * 100,
+               .names = "{.col}_pct_change")
+    ) %>% 
+  mutate(Response = factor(Response, levels = c("ln_SR", "ln_Rh", "ln_Ra")))
+
+#write.csv(CC_Resp_Forest_results, "G:/My Drive/Research/Projects/lit_review/Data/CC_Resp_Forest_result.csv", row.names = F)
+
+# ggplot
+cat_compare_plot(
+  CC_Resp_Forest_results,
+  "Forest", "Forest type", xlevels = NULL) + facet_wrap(~Response)
+
+# ANOVA
+CC_forest_SR <- aov(ln_SR ~ Forest_type, data = CC)
+summary(CC_forest_SR) 
+
+CC_forest_Rh <- aov(ln_Rh ~ Forest_type, data = CC)
+summary(CC_forest_Rh) 
+
+CC_forest_Ra <- aov(ln_Ra ~ Forest_type, data = CC)
+summary(CC_forest_Ra) 
+
+
+
+#########
+# Leaf ##
+########
+
+
+CC_Resp_Leaf <- list()
+
+Leaf <- c(Deciduous = "Deciduous", Evergreen = "Evergreen", Mix = "Mixed") 
+
+for (resp in Resp_Components) {
+    for (var in names(Leaf)) {
+        group_name <- paste("CC", resp, var, sep = "_")
+        CC_Resp_Leaf[[group_name]] <- run_boot_lmer(
+            CC %>% filter(Leaf_habit == Leaf[[var]]),
+            resp
+        )
+    }
+}
+
+# Bind and process results
+CC_Resp_Leaf_results <- 
+    bind_rows(CC_Resp_Leaf, .id = "Group") %>% 
+    mutate(
+        Resp = word(Group, 3, sep = "_"),
+        Leaf = word(Group, -1, sep = "_")
+    ) %>% 
+    mutate(
+        across(Intercept:Intercept_Upper, 
+               ~ (exp(1)^(.) - 1) * 100,
+               .names = "{.col}_pct_change")
+    ) %>% 
+  mutate(Response = factor(Response, levels = c("ln_SR", "ln_Rh", "ln_Ra")))
+
+#write.csv(CC_Resp_Leaf_results, "G:/My Drive/Research/Projects/lit_review/Data/CC_Resp_Leaf_result.csv", row.names = F)
+
+
+# ggplot
+cat_compare_plot(
+  CC_Resp_Leaf_results %>% filter(!str_detect(Group, "Mix")),
+  "Leaf", "Leaf type", xlevels = NULL) + facet_wrap(~ Response)
+
+# ANOVA
+CC_Leaf_SR <- aov(ln_SR ~ Leaf_habit, data = CC %>% filter(Leaf_habit != "Mix"))
+summary(CC_Leaf_SR) 
+
+CC_Leaf_Rh <- aov(ln_Rh ~ Leaf_habit, data = CC %>% filter(Leaf_habit != "Mix"))
+summary(CC_Leaf_Rh) 
+
+CC_Leaf_Ra <- aov(ln_Ra ~ Leaf_habit, data = CC %>% filter(Leaf_habit != "Mix"))
+summary(CC_Leaf_Ra) 
+
+###########
+### Climate
+##############
+CC_Resp_Climate <- list()
+
+# Define severity levels
+CC_climate <- 
+  c(Temperate = "Temperate", Mediterranean = "Mediterranean", Subtropical = "Subtropical",
+    Boreal = "Boreal", Tropical = "Tropical")
+
+# Run boot_lmer for each component and severity level
+for (resp in Resp_Components) {
+    for (var in names(CC_climate)) {
+        group_name <- paste("CC", resp, var, sep = "_")
+        CC_Resp_Climate[[group_name]] <- run_boot_lmer(
+            CC %>% filter(Climate_zone == CC_climate[[var]]),
+            resp
+        )
+    }
+}
+
+# Bind and process results
+CC_Resp_Climate_results <- 
+    bind_rows(CC_Resp_Climate, .id = "Group") %>% 
+    mutate(
+        Resp = word(Group, 3, sep = "_"),
+        Climate = word(Group, -1, sep = "_")
+    ) %>% 
+    mutate(
+        across(Intercept:Intercept_Upper, 
+               ~ (exp(1)^(.) - 1) * 100,
+               .names = "{.col}_pct_change")
+    ) %>% 
+  mutate(Response = factor(Response, levels = c("ln_SR", "ln_Rh", "ln_Ra")))
+
+#write.csv(CC_Resp_Climate_results, "G:/My Drive/Research/Projects/lit_review/Data/CC_Climate_result.csv", row.names = F)
+
+cat_compare_plot(
+  CC_Resp_Climate_results,
+  "Climate", "Climate", xlevels = NULL) + facet_wrap(~ Response) +
+  theme(axis.text.x = element_text(size = 15, angle = 45, hjust = 1))
+
+CC_Climate_SR <- aov(ln_SR ~ Climate_zone, data = CC)
+summary(CC_Climate_SR)
+TukeyHSD(CC_Climate_SR)
+```
+
+
+```{r TH cat comparison}
+###########
+### Climate
+##############
+TH_Resp_Climate <- list()
+
+# Define severity levels
+TH_climate <- c(Temperate = "Temperate", Mediterranean = "Mediterranean", Subtropical = "Subtropical")
+
+# Run boot_lmer for each component and severity level
+for (resp in Resp_Components) {
+    for (var in names(TH_climate)) {
+        group_name <- paste("TH", resp, var, sep = "_")
+        TH_Resp_Climate[[group_name]] <- run_boot_lmer(
+            TH %>% filter(Climate_zone == TH_climate[[var]]),
+            resp
+        )
+    }
+}
+
+# Bind and process results
+TH_Resp_Climate_results <- 
+    bind_rows(TH_Resp_Climate, .id = "Group") %>% 
+    mutate(
+        Resp = word(Group, 3, sep = "_"),
+        Climate = word(Group, -1, sep = "_")
+    ) %>% 
+    mutate(
+        across(Intercept:Intercept_Upper, 
+               ~ (exp(1)^(.) - 1) * 100,
+               .names = "{.col}_pct_change")
+    ) %>% 
+  mutate(Response = factor(Response, levels = c("ln_SR", "ln_Rh", "ln_Ra")))
+
+#write.csv(TH_Resp_Climate_results, "G:/My Drive/Research/Projects/lit_review/Data/TH_Climate_result.csv", row.names = F)
+
+cat_compare_plot(
+  TH_Resp_Climate_results %>% filter(Climate != "Subtropical"),
+  "Climate", "Climate", xlevels = NULL
+  ) + 
+  facet_wrap(~ Response) +
+  theme(axis.text.x = element_text(size = 15, angle = 45, hjust = 1))
+
+TH_Climate_SR <- aov(ln_SR ~ Climate_zone, data = TH)
+summary(TH_Climate_SR)
+TukeyHSD(TH_Climate_SR)
+
+TH_Climate_Rh <- aov(ln_Rh ~ Climate_zone, data = TH)
+summary(TH_Climate_Rh)
+
+
+##########
+# Season
+##########
+TH_Resp_Season <- list()
+
+for (resp in Resp_Components) {
+    for (var in names(season)) {
+        group_name <- paste("TH", resp, var, sep = "_")
+        TH_Resp_Season[[group_name]] <- run_boot_lmer(
+            TH %>% filter(Season == season[[var]]),
+            resp
+        )
+    }
+}
+
+# Bind and process results
+TH_Resp_Season_results <- 
+    bind_rows(TH_Resp_Season, .id = "Group") %>% 
+    mutate(
+        Resp = word(Group, 3, sep = "_"),
+        Season = word(Group, -1, sep = "_")
+    ) %>% 
+    mutate(
+        across(Intercept:Intercept_Upper, 
+               ~ (exp(1)^(.) - 1) * 100,
+               .names = "{.col}_pct_change")
+    )
+
+#write.csv(TH_Resp_Season_results, "G:/My Drive/Research/Projects/lit_review/Data/TH_Resp_Season_result.csv", row.names = F)
+
+# ggplot
+cat_compare_plot(
+  TH_Resp_Season_results %>% filter(Response == "ln_SR"),
+  "Season", "Season", xlevels = c("Spring", "Summer", "Fall", "Winter"))
+
+# ANOVA
+TH_season_SR <- aov(ln_SR ~ Season, data = TH %>% filter(Season != "NA"))
+summary(TH_season_SR) 
+TukeyHSD(TH_season_SR)
+
+
+##########
+# REPEAT
+##########
+TH_Resp_Repeat <- list()
+
+Repeat_var <- c(Y = "Y", N = "N")
+
+for (resp in Resp_Components) {
+    for (var in names(Repeat_var)) {
+        group_name <- paste("TH", resp, var, sep = "_")
+        TH_Resp_Repeat[[group_name]] <- run_boot_lmer(
+            TH %>% filter(Repeat == Repeat_var[[var]]),
+            resp
+        )
+    }
+}
+
+# Bind and process results
+TH_Resp_Repeat_results <- 
+    bind_rows(TH_Resp_Repeat, .id = "Group") %>% 
+    mutate(
+        Resp = word(Group, 3, sep = "_"),
+        Repeat = word(Group, -1, sep = "_")
+    ) %>% 
+    mutate(
+        across(Intercept:Intercept_Upper, 
+               ~ (exp(1)^(.) - 1) * 100,
+               .names = "{.col}_pct_change")
+    )
+
+#write.csv(TH_Resp_Repeat_results, "G:/My Drive/Research/Projects/lit_review/Data/TH_Resp_Repeat_result.csv", row.names = F)
+
+##########
+# Severity
+#########
+TH_Resp_Severity <- list()
+
+# Define severity levels
+TH_Severity <- c(High = "High", Moderate = "Moderate", Low = "Low")
+TH_Severity <- factor(TH_Severity, levels = c("High", "Moderate", "Low"))
+
+# Run boot_lmer for each component and severity level
+for (resp in Resp_Components) {
+    for (var in names(TH_Severity)) {
+        group_name <- paste("TH", resp, var, sep = "_")
+        TH_Resp_Severity[[group_name]] <- run_boot_lmer(
+            TH %>% filter(Severity_level == TH_Severity[[var]]),
+            resp
+        )
+    }
+}
+
+# Bind and process results
+TH_Resp_Severity_results <- 
+    bind_rows(TH_Resp_Severity, .id = "Group") %>% 
+    mutate(
+        Resp = word(Group, 3, sep = "_"),
+        Severity = word(Group, -1, sep = "_")
+    ) %>% 
+    mutate(
+        across(Intercept:Intercept_Upper, 
+               ~ (exp(1)^(.) - 1) * 100,
+               .names = "{.col}_pct_change")
+    ) %>% 
+  mutate(Response = factor(Response, levels = c("ln_SR", "ln_Rh", "ln_Ra")))
+
+#write.csv(TH_Resp_Severity_results, "G:/My Drive/Research/Projects/lit_review/Data/TH_severity_result.csv", row.names = F)
+
+# ggplot
+cat_compare_plot(
+  TH_Resp_Severity_results,
+  "Severity", "Severity", xlevels = c("High", "Moderate", "Low")
+  ) + 
+  facet_wrap(~ Response)
+
+# ANOVA
+TH_severity_SR <- aov(ln_SR ~ Severity_level, data = TH %>% filter(Severity_level != "NA"))
+summary(TH_severity_SR) 
+TukeyHSD(TH_severity_SR)
+
+TH_severity_Rh <- aov(ln_Rh ~ Severity_level, data = TH %>% filter(Severity_level != "NA"))
+summary(TH_severity_Rh) 
+TukeyHSD(TH_severity_Rh)
+
+TH_severity_Ra <- aov(ln_Ra ~ Severity_level, data = TH %>% filter(Severity_level != "NA"))
+summary(TH_severity_Ra) 
+TukeyHSD(TH_severity_Ra)
+
+#########
+# Forest type ##
+########
+
+
+TH_Resp_Forest <- list()
+
+for (resp in Resp_Components) {
+    for (var in names(Forest)) {
+        group_name <- paste("TH", resp, var, sep = "_")
+        TH_Resp_Forest[[group_name]] <- run_boot_lmer(
+            TH %>% filter(Forest_type == Forest[[var]]),
+            resp
+        )
+    }
+}
+
+# Bind and process results
+TH_Resp_Forest_results <- 
+    bind_rows(TH_Resp_Forest, .id = "Group") %>% 
+    mutate(
+        Resp = word(Group, 3, sep = "_"),
+        Forest = word(Group, -1, sep = "_")
+    ) %>% 
+    mutate(
+        across(Intercept:Intercept_Upper, 
+               ~ (exp(1)^(.) - 1) * 100,
+               .names = "{.col}_pct_change")
+    ) %>% 
+  mutate(Response = factor(Response, levels = c("ln_SR", "ln_Rh", "ln_Ra")))
+
+#write.csv(TH_Resp_Forest_results, "G:/My Drive/Research/Projects/lit_review/Data/TH_Resp_Forest_result.csv", row.names = F)
+
+# ggplot
+cat_compare_plot(
+  TH_Resp_Forest_results %>% filter(Response == "ln_SR"),
+  "Forest", "Forest type", NULL) 
+
+TH_forest_SR <- aov(ln_SR ~ Forest_type, data = TH)
+summary(TH_forest_SR) 
+
+
+#########
+# Leaf ##
+########
+TH_Resp_Leaf <- list()
+
+TH_leaf = c(Deciduous = "Deciduous", Evergreen = "Evergreen")
+
+for (resp in Resp_Components) {
+    for (var in names(TH_leaf)) {
+        group_name <- paste("TH", resp, var, sep = "_")
+        TH_Resp_Leaf[[group_name]] <- run_boot_lmer(
+            TH %>% filter(Leaf_habit == TH_leaf[[var]]),
+            resp
+        )
+    }
+}
+
+# Bind and process results
+TH_Resp_Leaf_results <- 
+    bind_rows(TH_Resp_Leaf, .id = "Group") %>% 
+    mutate(
+        Resp = word(Group, 3, sep = "_"),
+        Leaf = word(Group, -1, sep = "_")
+    ) %>% 
+    mutate(
+        across(Intercept:Intercept_Upper, 
+               ~ (exp(1)^(.) - 1) * 100,
+               .names = "{.col}_pct_change")
+    ) %>% 
+  mutate(Response = factor(Response, levels = c("ln_SR", "ln_Rh", "ln_Ra")))
+
+#write.csv(TH_Resp_Leaf_results, "G:/My Drive/Research/Projects/lit_review/Data/TH_Resp_Leaf_result.csv", row.names = F)
+
+# ggplot
+cat_compare_plot(
+  TH_Resp_Leaf_results,
+  "Leaf", "Leaf type", NULL) 
+
+TH_Leaf_SR <- aov(ln_SR ~ Leaf_habit, data = TH %>% filter(Leaf_habit != "Mix"))
+summary(TH_Leaf_SR) 
+
+```
+
+
+```{r PB cat comparison}
+# Severity
+PB_Resp_Severity <- list()
+
+# Run boot_lmer for each component and severity level
+for (resp in Resp_Components) {
+    for (var in names(TH_Severity)) {
+        group_name <- paste("CC", resp, var, sep = "_")
+        PB_Resp_Severity[[group_name]] <- run_boot_lmer(
+            PB %>% filter(Severity_level == TH_Severity[[var]]),
+            resp
+        )
+    }
+}
+
+# Bind and process results
+PB_Resp_Severity_results <- 
+    bind_rows(PB_Resp_Severity, .id = "Group") %>% 
+    mutate(
+        Resp = word(Group, 3, sep = "_"),
+        Severity = word(Group, -1, sep = "_")
+    ) %>% 
+    mutate(
+        across(Intercept:Intercept_Upper, 
+               ~ (exp(1)^(.) - 1) * 100,
+               .names = "{.col}_pct_change")
+    )
+
+#write.csv(PB_Resp_Severity_results, "G:/My Drive/Research/Projects/lit_review/Data/PB_severity_result.csv", row.names = F)
+
+# ggplot
+cat_compare_plot(
+  PB_Resp_Severity_results %>% filter(Response == "ln_SR"),
+  "Severity", "Severity", xlevels = NULL)
+
+##########
+# Season
+##########
+PB_Resp_Season <- list()
+
+for (resp in Resp_Components) {
+    for (var in names(season)) {
+        group_name <- paste("PB", resp, var, sep = "_")
+        PB_Resp_Season[[group_name]] <- run_boot_lmer(
+            PB %>% filter(Season == season[[var]]),
+            resp
+        )
+    }
+}
+
+# Bind and process results
+PB_Resp_Season_results <- 
+    bind_rows(PB_Resp_Season, .id = "Group") %>% 
+    mutate(
+        Resp = word(Group, 3, sep = "_"),
+        Season = word(Group, -1, sep = "_")
+    ) %>% 
+    mutate(
+        across(Intercept:Intercept_Upper, 
+               ~ (exp(1)^(.) - 1) * 100,
+               .names = "{.col}_pct_change")
+    )
+
+#write.csv(PB_Resp_Season_results, "G:/My Drive/Research/Projects/lit_review/Data/PB_Resp_Season_result.csv", row.names = F)
+
+# ggplot
+cat_compare_plot(
+  PB_Resp_Season_results %>% filter(Response == "ln_SR") %>% filter(Season != "Winter"),
+  "Season", "Season", xlevels = c("Spring", "Summer", "Fall", "Winter"))
+
+PB_season_SR <- aov(ln_SR ~ Season, data = PB %>% filter(Season != "NA"))
+summary(PB_season_SR) 
+
+#########
+# Forest type ##
+########
+
+
+PB_Resp_Forest <- list()
+
+for (resp in Resp_Components) {
+    for (var in names(Forest)) {
+        group_name <- paste("PB", resp, var, sep = "_")
+        PB_Resp_Forest[[group_name]] <- run_boot_lmer(
+            PB %>% filter(Forest_type == Forest[[var]]),
+            resp
+        )
+    }
+}
+
+# Bind and process results
+PB_Resp_Forest_results <- 
+    bind_rows(PB_Resp_Forest, .id = "Group") %>% 
+    mutate(
+        Resp = word(Group, 3, sep = "_"),
+        Forest = word(Group, -1, sep = "_")
+    ) %>% 
+    mutate(
+        across(Intercept:Intercept_Upper, 
+               ~ (exp(1)^(.) - 1) * 100,
+               .names = "{.col}_pct_change")
+    ) %>% 
+  mutate(Response = factor(Response, levels = c("ln_SR", "ln_Rh", "ln_Ra")))
+
+#write.csv(PB_Resp_Forest_results, "G:/My Drive/Research/Projects/lit_review/Data/PB_Resp_Forest_result.csv", row.names = F)
+
+# ggplot
+cat_compare_plot(
+  PB_Resp_Forest_results %>% filter(Response == "ln_SR"),
+  "Forest", "Forest type", xlevels = NULL) 
+
+# ANOVA
+PB_forest_SR <- aov(ln_SR ~ Forest_type, data = PB)
+summary(PB_forest_SR) 
+
+
+###########
+### Climate
+##############
+PB_Resp_Climate <- list()
+
+# Define severity levels
+PB_climate <- 
+  c(Temperate = "Temperate", Mediterranean = "Mediterranean", Subtropical = "Subtropical",
+    Boreal = "Boreal", Tropical = "Tropical")
+
+# Run boot_lmer for each component and severity level
+for (resp in Resp_Components) {
+    for (var in names(PB_climate)) {
+        group_name <- paste("PB", resp, var, sep = "_")
+        PB_Resp_Climate[[group_name]] <- run_boot_lmer(
+            PB %>% filter(Climate_zone == PB_climate[[var]]),
+            resp
+        )
+    }
+}
+
+# Bind and process results
+PB_Resp_Climate_results <- 
+    bind_rows(PB_Resp_Climate, .id = "Group") %>% 
+    mutate(
+        Resp = word(Group, 3, sep = "_"),
+        Climate = word(Group, -1, sep = "_")
+    ) %>% 
+    mutate(
+        across(Intercept:Intercept_Upper, 
+               ~ (exp(1)^(.) - 1) * 100,
+               .names = "{.col}_pct_change")
+    ) %>% 
+  mutate(Response = factor(Response, levels = c("ln_SR", "ln_Rh", "ln_Ra")))
+
+#write.csv(PB_Resp_Climate_results, "G:/My Drive/Research/Projects/lit_review/Data/PB_Climate_result.csv", row.names = F)
+
+cat_compare_plot(
+  PB_Resp_Climate_results %>% filter(Response == "ln_SR"),
+  "Climate", "Climate", xlevels = NULL) +
+  theme(axis.text.x = element_text(size = 15, angle = 45, hjust = 1))
+
+PB_Climate_SR <- aov(ln_SR ~ Climate_zone, data = PB)
+summary(PB_Climate_SR)
+TukeyHSD(PB_Climate_SR)
+
+
+###########
+### Repeat
+##############
+PB_Resp_Repeat <- list()
+
+# Define severity levels
+PB_Repeat <- c(Y = "Y", N = "N")
+
+# Run boot_lmer for each component and severity level
+for (resp in Resp_Components) {
+    for (var in names(PB_Repeat)) {
+        group_name <- paste("PB", resp, var, sep = "_")
+        PB_Resp_Repeat[[group_name]] <- run_boot_lmer(
+            PB %>% filter(Repeat == PB_Repeat[[var]]),
+            resp
+        )
+    }
+}
+
+# Bind and process results
+PB_Resp_Repeat_results <- 
+    bind_rows(PB_Resp_Repeat, .id = "Group") %>% 
+    mutate(
+        Resp = word(Group, 3, sep = "_"),
+        Repeat = word(Group, -1, sep = "_")
+    ) %>% 
+    mutate(
+        across(Intercept:Intercept_Upper, 
+               ~ (exp(1)^(.) - 1) * 100,
+               .names = "{.col}_pct_change")
+    ) %>% 
+  mutate(Response = factor(Response, levels = c("ln_SR", "ln_Rh", "ln_Ra")))
+
+#write.csv(PB_Resp_Repeat_results, "G:/My Drive/Research/Projects/lit_review/Data/PB_Repeat_result.csv", row.names = F)
+
+cat_compare_plot(
+  PB_Resp_Repeat_results %>% filter(Response == "ln_SR"),
+  "Repeat", "Repeat", xlevels = NULL) 
+
+PB_Repeat_SR <- aov(ln_SR ~ Repeat, data = PB)
+summary(PB_Repeat_SR)
+
+```
+
+```{r time since practices}
+
+# Iterate through each res variable and plot against each var variable
+plot_list <- list()
+
+for (res in Resp_Components) {
+    p <- ggplot(
+        lit_effect %>% 
+          filter(Management_type != "Partial cut") %>% 
+          mutate(Management_type = factor(Management_type, levels = rev(c("Clearcut", "Prescribed burn", "Thinning")))), 
+        aes(x = Time_since, y = .data[[res]], weight = Wt, color = Management_type)) +
+        geom_point(aes(size = Wt), shape = 1, stroke = 1.5, alpha = 0.3, show.legend = FALSE) +
+        stat_poly_line(aes(group = Management_type), se = FALSE, size = 2) +
+        stat_poly_eq(
+            aes(label = paste(after_stat(eq.label),
+                              after_stat(p.value.label),
+                              sep = "~~~"),
+                group = Management_type),
+            formula = y ~ x,
+            parse = TRUE,
+            size = 5,
+            coef.digits = 2,
+            p.digits = 2,
+            label.x.npc = "right",
+            label.y.npc = "bottom",
+            method = "lm"
+        ) +
+        geom_hline(yintercept = 0, color = "black", size = 1, alpha = 0.4, linetype = 'dotted') +
+        theme_classic() +
+        scale_color_manual(values = c(
+            "Clearcut" = "#F8766D",
+            "Prescribed burn" = "#00BFC4",
+            "Thinning" = "#C77CFF")) +
+        theme(
+            axis.title.x = element_text(size = 20),
+            axis.text.x = element_text(size = 20),
+            axis.title.y = element_text(size = 20),
+            axis.text.y = element_text(size = 20),
+            panel.border = element_rect(colour = "black", fill = NA, linewidth = 0.5)
+        )
+    
+    plot_list[[res]] <- p
+}
+
+# Combine with shared legend and title
+wrap_plots(plot_list, ncol = 3, guides = "collect") &
+    theme(
+      legend.position = "right",
+      legend.text = element_text(size = 16),
+    legend.title = element_text(size = 16)
+      ) &
+    plot_annotation(title = "Relationships between Time since and Response Variables")
+
+
+
+```
+
+
+```{r funnel plot}
+lit_effect %>% 
+  ggplot(aes(ln_SR, Wt)) + 
+  geom_vline(xintercept = 0, linetype = "dashed", color = "black") +
+  geom_point() +
+  theme_classic() +
+  labs(x = "Effect size (lnSR)",
+         y = "Weight") +
+  theme(
+    axis.title.x = element_text(size = 20),
+    axis.text.x = element_text(size = 20),
+    axis.title.y = element_text(size = 20),
+    axis.text.y = element_text(size = 20),
+    legend.position = "none",
+    panel.border = element_rect(colour = "black", fill = NA, linewidth = .5)
+  )
+  
+
+lit_effect %>% 
+  ggplot(aes(ln_Rh, Wt)) + geom_point()
+
+lit_effect %>% 
+  ggplot(aes(ln_Ra, Wt)) + geom_point()
+
+
+# Egger's test
+df <- lit_effect %>% 
+  filter(!is.na(ln_SR)) %>% 
+  mutate(
+    std_ES = ln_SR * sqrt(Wt),
+    precision = sqrt(Wt)
+    ) 
+
+egger_model_SR <- lm(std_ES ~ precision, data = df)  
+
+# Extract model summary
+sum_egger <- summary(egger_model_SR)
+
+# Get coefficient table (Estimate and Std. Error)
+coef_table <- coef(sum_egger)
+
+# Z-value for intercept (first row)
+z_intercept <- coef_table["(Intercept)", "Estimate"] / coef_table["(Intercept)", "Std. Error"]
+```
