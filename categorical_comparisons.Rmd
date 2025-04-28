@@ -1,0 +1,926 @@
+---
+title: "Untitled"
+author: "MOEKA"
+date: "2025-04-25"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+library(ggplot2)
+library(ggpmisc)
+
+library(tidyr)
+library(dplyr)
+library(broom)
+library(gridExtra)
+library(stringr)
+library(data.table)
+library(forestmangr)
+library(googlesheets4)
+library(ggpubr)
+
+library(rJava)
+library(glmulti)
+library(metafor)
+
+library(purrr)
+library(lme4)
+library(patchwork)
+library(stringr)
+
+library(rlang)
+```
+
+```{r CC cat comparison}
+# Severity
+CC_Resp_Severity <- list()
+
+# Define severity levels
+CC_Severity <- c(Stem = "S", WT = "WT", WTS = "WTS", WTSC = "WTSC")
+
+# Define respiration components
+Resp_Components <- c("ln_SR", "ln_Rh", "ln_Ra")
+
+# Run boot_lmer for each component and severity level
+for (resp in Resp_Components) {
+    for (var in names(CC_Severity)) {
+        group_name <- paste("CC", resp, var, sep = "_")
+        CC_Resp_Severity[[group_name]] <- run_boot_lmer(
+            CC %>% filter(Severity_level == CC_Severity[[var]]),
+            resp
+        )
+    }
+}
+
+# Bind and process results
+CC_Resp_Severity_results <- 
+    bind_rows(CC_Resp_Severity, .id = "Group") %>% 
+    mutate(
+        Resp = word(Group, 3, sep = "_"),
+        Severity = word(Group, -1, sep = "_")
+    ) %>% 
+    mutate(
+        across(Intercept:Intercept_Upper, 
+               ~ (exp(1)^(.) - 1) * 100,
+               .names = "{.col}_pct_change")
+    )
+
+#write.csv(CC_Resp_Severity_results, "G:/My Drive/Research/Projects/lit_review/Data/CC_severity_result.csv", row.names = F)
+
+
+CC_severity_SR <- aov(ln_SR ~ Severity_level, data = CC %>% filter(!Severity_level == "High" & !Severity_level == "NA"))
+summary(CC_severity_SR) 
+TukeyHSD(CC_severity_SR)
+
+
+##########
+# Season
+##########
+CC_Resp_Season <- list()
+
+season <- c(Spring = "Spring", Summer = "Summer", Fall = "Fall", Winter = "Winter")
+levels(season) = c("Spring", "Summer", "Fall", "Winter")
+
+for (resp in Resp_Components) {
+    for (var in names(season)) {
+        group_name <- paste("CC", resp, var, sep = "_")
+        CC_Resp_Season[[group_name]] <- run_boot_lmer(
+            CC %>% filter(Season == season[[var]]),
+            resp
+        )
+    }
+}
+
+# Bind and process results
+CC_Resp_Season_results <- 
+    bind_rows(CC_Resp_Season, .id = "Group") %>% 
+    mutate(
+        Resp = word(Group, 3, sep = "_"),
+        Season = word(Group, -1, sep = "_")
+    ) %>% 
+    mutate(
+        across(Intercept:Intercept_Upper, 
+               ~ (exp(1)^(.) - 1) * 100,
+               .names = "{.col}_pct_change")
+    )
+
+#write.csv(CC_Resp_Season_results, "G:/My Drive/Research/Projects/lit_review/Data/CC_Resp_Season_result.csv", row.names = F)
+
+CC_season_SR <- aov(ln_SR ~ Season, data = CC %>% filter(Season != "NA"))
+summary(CC_season_SR) 
+TukeyHSD(CC_season_SR)
+
+#########
+# Forest type ##
+########
+
+
+CC_Resp_Forest <- list()
+
+Forest <- c(Broadleaf = "Broadleaf", Needleleaf = "Needleleaf")
+
+for (resp in Resp_Components) {
+    for (var in names(Forest)) {
+        group_name <- paste("CC", resp, var, sep = "_")
+        CC_Resp_Forest[[group_name]] <- run_boot_lmer(
+            CC %>% filter(Forest_type == Forest[[var]]),
+            resp
+        )
+    }
+}
+
+# Bind and process results
+CC_Resp_Forest_results <- 
+    bind_rows(CC_Resp_Forest, .id = "Group") %>% 
+    mutate(
+        Resp = word(Group, 3, sep = "_"),
+        Forest = word(Group, -1, sep = "_")
+    ) %>% 
+    mutate(
+        across(Intercept:Intercept_Upper, 
+               ~ (exp(1)^(.) - 1) * 100,
+               .names = "{.col}_pct_change")
+    ) %>% 
+  mutate(Response = factor(Response, levels = c("ln_SR", "ln_Rh", "ln_Ra")))
+
+#write.csv(CC_Resp_Forest_results, "G:/My Drive/Research/Projects/lit_review/Data/CC_Resp_Forest_result.csv", row.names = F)
+
+
+# ANOVA
+CC_forest_SR <- aov(ln_SR ~ Forest_type, data = CC)
+summary(CC_forest_SR) 
+
+CC_forest_Rh <- aov(ln_Rh ~ Forest_type, data = CC)
+summary(CC_forest_Rh) 
+
+CC_forest_Ra <- aov(ln_Ra ~ Forest_type, data = CC)
+summary(CC_forest_Ra) 
+
+
+
+#########
+# Leaf ##
+########
+
+
+CC_Resp_Leaf <- list()
+
+Leaf <- c(Deciduous = "Deciduous", Evergreen = "Evergreen", Mix = "Mixed") 
+
+for (resp in Resp_Components) {
+    for (var in names(Leaf)) {
+        group_name <- paste("CC", resp, var, sep = "_")
+        CC_Resp_Leaf[[group_name]] <- run_boot_lmer(
+            CC %>% filter(Leaf_habit == Leaf[[var]]),
+            resp
+        )
+    }
+}
+
+# Bind and process results
+CC_Resp_Leaf_results <- 
+    bind_rows(CC_Resp_Leaf, .id = "Group") %>% 
+    mutate(
+        Resp = word(Group, 3, sep = "_"),
+        Leaf = word(Group, -1, sep = "_")
+    ) %>% 
+    mutate(
+        across(Intercept:Intercept_Upper, 
+               ~ (exp(1)^(.) - 1) * 100,
+               .names = "{.col}_pct_change")
+    ) %>% 
+  mutate(Response = factor(Response, levels = c("ln_SR", "ln_Rh", "ln_Ra")))
+
+#write.csv(CC_Resp_Leaf_results, "G:/My Drive/Research/Projects/lit_review/Data/CC_Resp_Leaf_result.csv", row.names = F)
+
+
+# ANOVA
+CC_Leaf_SR <- aov(ln_SR ~ Leaf_habit, data = CC %>% filter(Leaf_habit != "Mix"))
+summary(CC_Leaf_SR) 
+
+CC_Leaf_Rh <- aov(ln_Rh ~ Leaf_habit, data = CC %>% filter(Leaf_habit != "Mix"))
+summary(CC_Leaf_Rh) 
+
+CC_Leaf_Ra <- aov(ln_Ra ~ Leaf_habit, data = CC %>% filter(Leaf_habit != "Mix"))
+summary(CC_Leaf_Ra) 
+
+###########
+### Climate
+##############
+CC_Resp_Climate <- list()
+
+# Define severity levels
+CC_climate <- 
+  c(Temperate = "Temperate", Mediterranean = "Mediterranean", Subtropical = "Subtropical",
+    Boreal = "Boreal", Tropical = "Tropical")
+
+# Run boot_lmer for each component and severity level
+for (resp in Resp_Components) {
+    for (var in names(CC_climate)) {
+        group_name <- paste("CC", resp, var, sep = "_")
+        CC_Resp_Climate[[group_name]] <- run_boot_lmer(
+            CC %>% filter(Climate_zone == CC_climate[[var]]),
+            resp
+        )
+    }
+}
+
+# Bind and process results
+CC_Resp_Climate_results <- 
+    bind_rows(CC_Resp_Climate, .id = "Group") %>% 
+    mutate(
+        Resp = word(Group, 3, sep = "_"),
+        Climate = word(Group, -1, sep = "_")
+    ) %>% 
+    mutate(
+        across(Intercept:Intercept_Upper, 
+               ~ (exp(1)^(.) - 1) * 100,
+               .names = "{.col}_pct_change")
+    ) %>% 
+  mutate(Response = factor(Response, levels = c("ln_SR", "ln_Rh", "ln_Ra")))
+
+#write.csv(CC_Resp_Climate_results, "G:/My Drive/Research/Projects/lit_review/Data/CC_Climate_result.csv", row.names = F)
+
+CC_Climate_SR <- aov(ln_SR ~ Climate_zone, data = CC)
+summary(CC_Climate_SR)
+TukeyHSD(CC_Climate_SR)
+
+###########
+### Residue
+##############
+CC_Resp_Residue <- list()
+Residue_class <- c(Y = "Y", N = "N")
+
+# Run boot_lmer for each component and severity level
+for (resp in Resp_Components) {
+    for (var in names(Residue_class)) {
+        group_name <- paste("CC", resp, var, sep = "_")
+        CC_Resp_Residue[[group_name]] <- run_boot_lmer(
+            CC %>% filter(Residue == Residue_class[[var]]),
+            resp
+        )
+    }
+}
+
+# Bind and process results
+CC_Resp_Residue_results <- 
+    bind_rows(CC_Resp_Residue, .id = "Group") %>% 
+    mutate(
+        Resp = word(Group, 3, sep = "_"),
+        Residue = word(Group, -1, sep = "_")
+    ) %>% 
+    mutate(
+        across(Intercept:Intercept_Upper, 
+               ~ (exp(1)^(.) - 1) * 100,
+               .names = "{.col}_pct_change")
+    ) %>% 
+  mutate(Response = factor(Response, levels = c("ln_SR", "ln_Rh", "ln_Ra")))
+
+#write.csv(CC_Resp_Residue_results, "G:/My Drive/Research/Projects/lit_review/Data/CC_Residue_result.csv", row.names = F)
+
+CC_Residue_SR <- aov(ln_SR ~ Residue, data = CC)
+summary(CC_Residue_SR)
+```
+
+```{r TH cat comparison}
+###########
+### Climate
+##############
+TH_Resp_Climate <- list()
+
+# Define severity levels
+TH_climate <- c(Temperate = "Temperate", Mediterranean = "Mediterranean", Subtropical = "Subtropical")
+
+# Run boot_lmer for each component and severity level
+for (resp in Resp_Components) {
+    for (var in names(TH_climate)) {
+        group_name <- paste("TH", resp, var, sep = "_")
+        TH_Resp_Climate[[group_name]] <- run_boot_lmer(
+            TH %>% filter(Climate_zone == TH_climate[[var]]),
+            resp
+        )
+    }
+}
+
+# Bind and process results
+TH_Resp_Climate_results <- 
+    bind_rows(TH_Resp_Climate, .id = "Group") %>% 
+    mutate(
+        Resp = word(Group, 3, sep = "_"),
+        Climate = word(Group, -1, sep = "_")
+    ) %>% 
+    mutate(
+        across(Intercept:Intercept_Upper, 
+               ~ (exp(1)^(.) - 1) * 100,
+               .names = "{.col}_pct_change")
+    ) %>% 
+  mutate(Response = factor(Response, levels = c("ln_SR", "ln_Rh", "ln_Ra")))
+
+#write.csv(TH_Resp_Climate_results, "G:/My Drive/Research/Projects/lit_review/Data/TH_Climate_result.csv", row.names = F)
+
+TH_Climate_SR <- aov(ln_SR ~ Climate_zone, data = TH)
+summary(TH_Climate_SR)
+TukeyHSD(TH_Climate_SR)
+
+TH_Climate_Rh <- aov(ln_Rh ~ Climate_zone, data = TH)
+summary(TH_Climate_Rh)
+
+
+##########
+# Season
+##########
+TH_Resp_Season <- list()
+
+for (resp in Resp_Components) {
+    for (var in names(season)) {
+        group_name <- paste("TH", resp, var, sep = "_")
+        TH_Resp_Season[[group_name]] <- run_boot_lmer(
+            TH %>% filter(Season == season[[var]]),
+            resp
+        )
+    }
+}
+
+# Bind and process results
+TH_Resp_Season_results <- 
+    bind_rows(TH_Resp_Season, .id = "Group") %>% 
+    mutate(
+        Resp = word(Group, 3, sep = "_"),
+        Season = word(Group, -1, sep = "_")
+    ) %>% 
+    mutate(
+        across(Intercept:Intercept_Upper, 
+               ~ (exp(1)^(.) - 1) * 100,
+               .names = "{.col}_pct_change")
+    )
+
+#write.csv(TH_Resp_Season_results, "G:/My Drive/Research/Projects/lit_review/Data/TH_Resp_Season_result.csv", row.names = F)
+
+# ANOVA
+TH_season_SR <- aov(ln_SR ~ Season, data = TH %>% filter(Season != "NA"))
+summary(TH_season_SR) 
+TukeyHSD(TH_season_SR)
+
+
+##########
+# REPEAT
+##########
+TH_Resp_Repeat <- list()
+
+Repeat_var <- c(Y = "Y", N = "N")
+
+for (resp in Resp_Components) {
+    for (var in names(Repeat_var)) {
+        group_name <- paste("TH", resp, var, sep = "_")
+        TH_Resp_Repeat[[group_name]] <- run_boot_lmer(
+            TH %>% filter(Repeat == Repeat_var[[var]]),
+            resp
+        )
+    }
+}
+
+# Bind and process results
+TH_Resp_Repeat_results <- 
+    bind_rows(TH_Resp_Repeat, .id = "Group") %>% 
+    mutate(
+        Resp = word(Group, 3, sep = "_"),
+        Repeat = word(Group, -1, sep = "_")
+    ) %>% 
+    mutate(
+        across(Intercept:Intercept_Upper, 
+               ~ (exp(1)^(.) - 1) * 100,
+               .names = "{.col}_pct_change")
+    )
+
+#write.csv(TH_Resp_Repeat_results, "G:/My Drive/Research/Projects/lit_review/Data/TH_Resp_Repeat_result.csv", row.names = F)
+
+##########
+# Severity
+#########
+TH_Resp_Severity <- list()
+
+# Define severity levels
+TH_Severity <- c(High = "High", Moderate = "Moderate", Low = "Low")
+TH_Severity <- factor(TH_Severity, levels = c("High", "Moderate", "Low"))
+
+# Run boot_lmer for each component and severity level
+for (resp in Resp_Components) {
+    for (var in names(TH_Severity)) {
+        group_name <- paste("TH", resp, var, sep = "_")
+        TH_Resp_Severity[[group_name]] <- run_boot_lmer(
+            TH %>% filter(Severity_level == TH_Severity[[var]]),
+            resp
+        )
+    }
+}
+
+# Bind and process results
+TH_Resp_Severity_results <- 
+    bind_rows(TH_Resp_Severity, .id = "Group") %>% 
+    mutate(
+        Resp = word(Group, 3, sep = "_"),
+        Severity = word(Group, -1, sep = "_")
+    ) %>% 
+    mutate(
+        across(Intercept:Intercept_Upper, 
+               ~ (exp(1)^(.) - 1) * 100,
+               .names = "{.col}_pct_change")
+    ) %>% 
+  mutate(Response = factor(Response, levels = c("ln_SR", "ln_Rh", "ln_Ra")))
+
+#write.csv(TH_Resp_Severity_results, "G:/My Drive/Research/Projects/lit_review/Data/TH_severity_result.csv", row.names = F)
+
+# ANOVA
+TH_severity_SR <- aov(ln_SR ~ Severity_level, data = TH %>% filter(Severity_level != "NA"))
+summary(TH_severity_SR) 
+TukeyHSD(TH_severity_SR)
+
+TH_severity_Rh <- aov(ln_Rh ~ Severity_level, data = TH %>% filter(Severity_level != "NA"))
+summary(TH_severity_Rh) 
+TukeyHSD(TH_severity_Rh)
+
+TH_severity_Ra <- aov(ln_Ra ~ Severity_level, data = TH %>% filter(Severity_level != "NA"))
+summary(TH_severity_Ra) 
+TukeyHSD(TH_severity_Ra)
+
+#########
+# Forest type ##
+########
+
+
+TH_Resp_Forest <- list()
+
+for (resp in Resp_Components) {
+    for (var in names(Forest)) {
+        group_name <- paste("TH", resp, var, sep = "_")
+        TH_Resp_Forest[[group_name]] <- run_boot_lmer(
+            TH %>% filter(Forest_type == Forest[[var]]),
+            resp
+        )
+    }
+}
+
+# Bind and process results
+TH_Resp_Forest_results <- 
+    bind_rows(TH_Resp_Forest, .id = "Group") %>% 
+    mutate(
+        Resp = word(Group, 3, sep = "_"),
+        Forest = word(Group, -1, sep = "_")
+    ) %>% 
+    mutate(
+        across(Intercept:Intercept_Upper, 
+               ~ (exp(1)^(.) - 1) * 100,
+               .names = "{.col}_pct_change")
+    ) %>% 
+  mutate(Response = factor(Response, levels = c("ln_SR", "ln_Rh", "ln_Ra")))
+
+#write.csv(TH_Resp_Forest_results, "G:/My Drive/Research/Projects/lit_review/Data/TH_Resp_Forest_result.csv", row.names = F)
+
+
+TH_forest_SR <- aov(ln_SR ~ Forest_type, data = TH)
+summary(TH_forest_SR) 
+
+
+#########
+# Leaf ##
+########
+TH_Resp_Leaf <- list()
+
+TH_leaf = c(Deciduous = "Deciduous", Evergreen = "Evergreen")
+
+for (resp in Resp_Components) {
+    for (var in names(TH_leaf)) {
+        group_name <- paste("TH", resp, var, sep = "_")
+        TH_Resp_Leaf[[group_name]] <- run_boot_lmer(
+            TH %>% filter(Leaf_habit == TH_leaf[[var]]),
+            resp
+        )
+    }
+}
+
+# Bind and process results
+TH_Resp_Leaf_results <- 
+    bind_rows(TH_Resp_Leaf, .id = "Group") %>% 
+    mutate(
+        Resp = word(Group, 3, sep = "_"),
+        Leaf = word(Group, -1, sep = "_")
+    ) %>% 
+    mutate(
+        across(Intercept:Intercept_Upper, 
+               ~ (exp(1)^(.) - 1) * 100,
+               .names = "{.col}_pct_change")
+    ) %>% 
+  mutate(Response = factor(Response, levels = c("ln_SR", "ln_Rh", "ln_Ra")))
+
+#write.csv(TH_Resp_Leaf_results, "G:/My Drive/Research/Projects/lit_review/Data/TH_Resp_Leaf_result.csv", row.names = F)
+
+TH_Leaf_SR <- aov(ln_SR ~ Leaf_habit, data = TH %>% filter(Leaf_habit != "Mix"))
+summary(TH_Leaf_SR) 
+
+
+###########
+### Residue
+##############
+TH_Resp_Residue <- list()
+
+# Run boot_lmer for each component and severity level
+for (resp in Resp_Components) {
+    for (var in names(Residue_class)) {
+        group_name <- paste("TH", resp, var, sep = "_")
+        TH_Resp_Residue[[group_name]] <- run_boot_lmer(
+            TH %>% filter(Residue == Residue_class[[var]]),
+            resp
+        )
+    }
+}
+
+# Bind and process results
+TH_Resp_Residue_results <- 
+    bind_rows(TH_Resp_Residue, .id = "Group") %>% 
+    mutate(
+        Resp = word(Group, 3, sep = "_"),
+        Residue = word(Group, -1, sep = "_")
+    ) %>% 
+    mutate(
+        across(Intercept:Intercept_Upper, 
+               ~ (exp(1)^(.) - 1) * 100,
+               .names = "{.col}_pct_change")
+    ) %>% 
+  mutate(Response = factor(Response, levels = c("ln_SR", "ln_Rh", "ln_Ra")))
+
+#write.csv(TH_Resp_Residue_results, "G:/My Drive/Research/Projects/lit_review/Data/TH_Residue_result.csv", row.names = F)
+
+```
+
+
+```{r PB cat comparison}
+# Severity
+PB_Resp_Severity <- list()
+
+# Run boot_lmer for each component and severity level
+for (resp in Resp_Components) {
+    for (var in names(TH_Severity)) {
+        group_name <- paste("CC", resp, var, sep = "_")
+        PB_Resp_Severity[[group_name]] <- run_boot_lmer(
+            PB %>% filter(Severity_level == TH_Severity[[var]]),
+            resp
+        )
+    }
+}
+
+# Bind and process results
+PB_Resp_Severity_results <- 
+    bind_rows(PB_Resp_Severity, .id = "Group") %>% 
+    mutate(
+        Resp = word(Group, 3, sep = "_"),
+        Severity = word(Group, -1, sep = "_")
+    ) %>% 
+    mutate(
+        across(Intercept:Intercept_Upper, 
+               ~ (exp(1)^(.) - 1) * 100,
+               .names = "{.col}_pct_change")
+    )
+
+#write.csv(PB_Resp_Severity_results, "G:/My Drive/Research/Projects/lit_review/Data/PB_severity_result.csv", row.names = F)
+
+##########
+# Season
+##########
+PB_Resp_Season <- list()
+
+for (resp in Resp_Components) {
+    for (var in names(season)) {
+        group_name <- paste("PB", resp, var, sep = "_")
+        PB_Resp_Season[[group_name]] <- run_boot_lmer(
+            PB %>% filter(Season == season[[var]]),
+            resp
+        )
+    }
+}
+
+# Bind and process results
+PB_Resp_Season_results <- 
+    bind_rows(PB_Resp_Season, .id = "Group") %>% 
+    mutate(
+        Resp = word(Group, 3, sep = "_"),
+        Season = word(Group, -1, sep = "_")
+    ) %>% 
+    mutate(
+        across(Intercept:Intercept_Upper, 
+               ~ (exp(1)^(.) - 1) * 100,
+               .names = "{.col}_pct_change")
+    )
+
+#write.csv(PB_Resp_Season_results, "G:/My Drive/Research/Projects/lit_review/Data/PB_Resp_Season_result.csv", row.names = F)
+
+PB_season_SR <- aov(ln_SR ~ Season, data = PB %>% filter(Season != "NA"))
+summary(PB_season_SR) 
+
+#########
+# Forest type ##
+########
+
+
+PB_Resp_Forest <- list()
+
+for (resp in Resp_Components) {
+    for (var in names(Forest)) {
+        group_name <- paste("PB", resp, var, sep = "_")
+        PB_Resp_Forest[[group_name]] <- run_boot_lmer(
+            PB %>% filter(Forest_type == Forest[[var]]),
+            resp
+        )
+    }
+}
+
+# Bind and process results
+PB_Resp_Forest_results <- 
+    bind_rows(PB_Resp_Forest, .id = "Group") %>% 
+    mutate(
+        Resp = word(Group, 3, sep = "_"),
+        Forest = word(Group, -1, sep = "_")
+    ) %>% 
+    mutate(
+        across(Intercept:Intercept_Upper, 
+               ~ (exp(1)^(.) - 1) * 100,
+               .names = "{.col}_pct_change")
+    ) %>% 
+  mutate(Response = factor(Response, levels = c("ln_SR", "ln_Rh", "ln_Ra")))
+
+#write.csv(PB_Resp_Forest_results, "G:/My Drive/Research/Projects/lit_review/Data/PB_Resp_Forest_result.csv", row.names = F)
+
+# ANOVA
+PB_forest_SR <- aov(ln_SR ~ Forest_type, data = PB)
+summary(PB_forest_SR) 
+
+
+###########
+### Climate
+##############
+PB_Resp_Climate <- list()
+
+# Define severity levels
+PB_climate <- 
+  c(Temperate = "Temperate", Mediterranean = "Mediterranean", Subtropical = "Subtropical",
+    Boreal = "Boreal", Tropical = "Tropical")
+
+# Run boot_lmer for each component and severity level
+for (resp in Resp_Components) {
+    for (var in names(PB_climate)) {
+        group_name <- paste("PB", resp, var, sep = "_")
+        PB_Resp_Climate[[group_name]] <- run_boot_lmer(
+            PB %>% filter(Climate_zone == PB_climate[[var]]),
+            resp
+        )
+    }
+}
+
+# Bind and process results
+PB_Resp_Climate_results <- 
+    bind_rows(PB_Resp_Climate, .id = "Group") %>% 
+    mutate(
+        Resp = word(Group, 3, sep = "_"),
+        Climate = word(Group, -1, sep = "_")
+    ) %>% 
+    mutate(
+        across(Intercept:Intercept_Upper, 
+               ~ (exp(1)^(.) - 1) * 100,
+               .names = "{.col}_pct_change")
+    ) %>% 
+  mutate(Response = factor(Response, levels = c("ln_SR", "ln_Rh", "ln_Ra")))
+
+#write.csv(PB_Resp_Climate_results, "G:/My Drive/Research/Projects/lit_review/Data/PB_Climate_result.csv", row.names = F)
+
+
+PB_Climate_SR <- aov(ln_SR ~ Climate_zone, data = PB)
+summary(PB_Climate_SR)
+TukeyHSD(PB_Climate_SR)
+
+
+###########
+### Repeat
+##############
+PB_Resp_Repeat <- list()
+
+# Define severity levels
+PB_Repeat <- c(Y = "Y", N = "N")
+
+# Run boot_lmer for each component and severity level
+for (resp in Resp_Components) {
+    for (var in names(PB_Repeat)) {
+        group_name <- paste("PB", resp, var, sep = "_")
+        PB_Resp_Repeat[[group_name]] <- run_boot_lmer(
+            PB %>% filter(Repeat == PB_Repeat[[var]]),
+            resp
+        )
+    }
+}
+
+# Bind and process results
+PB_Resp_Repeat_results <- 
+    bind_rows(PB_Resp_Repeat, .id = "Group") %>% 
+    mutate(
+        Resp = word(Group, 3, sep = "_"),
+        Repeat = word(Group, -1, sep = "_")
+    ) %>% 
+    mutate(
+        across(Intercept:Intercept_Upper, 
+               ~ (exp(1)^(.) - 1) * 100,
+               .names = "{.col}_pct_change")
+    ) %>% 
+  mutate(Response = factor(Response, levels = c("ln_SR", "ln_Rh", "ln_Ra")))
+
+#write.csv(PB_Resp_Repeat_results, "G:/My Drive/Research/Projects/lit_review/Data/PB_Repeat_result.csv", row.names = F)
+
+PB_Repeat_SR <- aov(ln_SR ~ Repeat, data = PB)
+summary(PB_Repeat_SR)
+
+```
+
+
+```{r read df}
+cat_summary <- read.csv("G:/My Drive/Research/Projects/lit_review/Data/cat_summary.csv")
+
+plot_cat_summary <- 
+   cat_summary %>%
+   filter(n_study > 2) %>%
+   mutate(
+     color_group = case_when(
+     Intercept_Lower_pct_change > 0 & Intercept_Upper_pct_change > 0 ~ "royalblue",
+     Intercept_Lower_pct_change < 0 & Intercept_Upper_pct_change < 0 ~ "red2",
+     TRUE ~ "black")
+ )
+
+```
+
+
+```{r graph function}
+
+cat_graph <- function(df, Var_order){
+  ggplot(df) +
+  geom_point(aes(
+    x = Intercept_pct_change,
+    y = factor(Var_kind, levels = Var_order),
+    color = color_group
+  ), size = 5) +
+  geom_errorbarh(aes(
+    y = factor(Var_kind, levels = Var_order),
+    xmin = Intercept_Lower_pct_change,
+    xmax = Intercept_Upper_pct_change,
+    color = color_group
+  ), height = 0.2, linewidth = 1.5) +
+  geom_vline(xintercept = 0, color = "black", size = 1.5, alpha = 0.4) +
+  geom_text(aes(
+    x = Intercept_Upper_pct_change + 20,
+    y = factor(Var_kind, levels = Var_order),
+    label = paste0(n_obs, " (", n_study, ")")
+  ),
+  vjust = 0.5, size = 4) +
+  scale_color_identity(guide = "none") + 
+  xlab(expression("Effect Size (%)")) +
+  theme_classic2() +
+  xlim(-100, 100) +
+  theme(
+    axis.title.x = element_text(size = 15),
+    axis.text.x = element_text(size = 15),
+    axis.title.y = element_blank(),
+    axis.text.y = element_text(size = 15),
+    strip.text = element_text(size = 15),
+    panel.border = element_rect(colour = "black", fill = NA, linewidth = 0.1)
+  )
+}
+
+```
+
+```{r SR}
+#CC_SR
+p_CC_Climate_SR <- 
+  cat_graph(
+    plot_cat_summary %>% 
+      filter(Resp == "SR", Var == "Climate", Management == "Clearcut"), 
+    rev(c("Boreal", "Temperate", "Mediterranean", "Subtropical", "Tropical"))
+    )
+
+p_CC_Forest_SR <- 
+  cat_graph(
+    plot_cat_summary %>% filter(Resp == "SR", Var == "Forest_type", Management == "Clearcut"), 
+    Var_order = rev(c("Broadleaf", "Needleleaf"))
+    )
+p_CC_Season_SR <- 
+  cat_graph(
+    plot_cat_summary %>% filter(Resp == "SR", Var == "Season", Management == "Clearcut"), 
+    Var_order = rev(c("Spring", "Summer", "Fall", "Winter"))
+    )
+p_CC_Severity_SR <- 
+  cat_graph(
+    plot_cat_summary %>% filter(Resp == "SR", Var == "Severity", Management == "Clearcut"), 
+    Var_order = rev(c("Stem", "WT", "WTS", "WTSC"))
+    )
+  
+p_CC_Residue_SR <- 
+  cat_graph(
+    plot_cat_summary %>% 
+      filter(Resp == "SR", Var == "Residue", Management == "Clearcut"), 
+    rev(c("Residue", "No residue"))
+    )
+
+# TH_SR
+p_TH_Climate_SR <- 
+  cat_graph(
+    plot_cat_summary %>% filter(Resp == "SR", Var == "Climate", Management == "Thinning"), 
+    Var_order = rev(c("Boreal", "Temperate", "Mediterranean", "Subtropical", "Tropical"))
+    )
+
+p_TH_Forest_SR <- 
+  cat_graph(
+    plot_cat_summary %>% filter(Resp == "SR", Var == "Forest_type", Management == "Thinning"), 
+    Var_order = rev(c("Broadleaf", "Needleleaf"))
+    )
+p_TH_Season_SR <- 
+  cat_graph(
+    plot_cat_summary %>% filter(Resp == "SR", Var == "Season", Management == "Thinning"), 
+    Var_order = rev(c("Spring", "Summer", "Fall", "Winter"))
+    )
+p_TH_Severity_SR <- 
+  cat_graph(
+    plot_cat_summary %>% filter(Resp == "SR", Var == "Severity", Management == "Thinning"), 
+    Var_order = rev(c("Low", "Moderate", "High"))
+    )
+
+p_TH_Residue_SR <- 
+  cat_graph(
+    plot_cat_summary %>% 
+      filter(Resp == "SR", Var == "Residue", Management == "Thinning"), 
+    rev(c("Residue", "No residue"))
+    )
+
+# PB_SR
+p_PB_Climate_SR <- 
+  cat_graph(
+    plot_cat_summary %>% filter(Resp == "SR", Var == "Climate", Management == "Prescribed burn"), 
+    Var_order = rev(c("Boreal", "Temperate", "Mediterranean", "Subtropical", "Tropical"))
+    )
+
+p_PB_Forest_SR <- 
+  cat_graph(
+    plot_cat_summary %>% filter(Resp == "SR", Var == "Forest_type", Management == "Prescribed burn"), 
+    Var_order = rev(c("Broadleaf", "Needleleaf"))
+    )
+
+p_PB_Season_SR <- 
+  cat_graph(
+    plot_cat_summary %>% filter(Resp == "SR", Var == "Season", Management == "Prescribed burn"), 
+    Var_order = rev(c("Spring", "Summer", "Fall", "Winter"))
+    )
+
+p_PB_Repeat_SR <- 
+  cat_graph(
+    plot_cat_summary %>% filter(Resp == "SR", Var == "Repeat", Management == "Prescribed burn"), 
+    Var_order = rev(c("Repeated", "Single"))
+    )
+
+```
+
+```{r Rh & Ra}
+#CC
+
+p_CC_Forest_Rh <- 
+  cat_graph(
+    plot_cat_summary %>% filter(Resp == "Rh", Var == "Forest_type", Management == "Clearcut"), 
+    Var_order = rev(c("Broadleaf", "Needleleaf"))
+    )
+
+p_CC_Climate_Rh <- 
+  cat_graph(
+    plot_cat_summary %>% filter(Resp == "Rh", Var == "Climate", Management == "Clearcut"), 
+    Var_order = rev(c("Boreal", "Temperate", "Mediterranean", "Subtropical", "Tropical"))
+    )
+
+p_CC_Forest_Ra <- 
+  cat_graph(
+    plot_cat_summary %>% filter(Resp == "Ra", Var == "Forest_type", Management == "Clearcut"), 
+    Var_order = rev(c("Broadleaf", "Needleleaf"))
+    )
+
+p_CC_Climate_Ra <- 
+  cat_graph(
+    plot_cat_summary %>% filter(Resp == "Ra", Var == "Climate", Management == "Clearcut"), 
+    Var_order = rev(c("Boreal", "Temperate", "Mediterranean", "Subtropical", "Tropical"))
+    )
+
+# TH
+p_TH_Severity_Rh <- 
+  cat_graph(
+    plot_cat_summary %>% filter(Resp == "Rh", Var == "Severity", Management == "Thinning"), 
+    Var_order = rev(c("Low", "Moderate", "High"))
+    )
+p_TH_Severity_Ra <- 
+  cat_graph(
+    plot_cat_summary %>% filter(Resp == "Ra", Var == "Severity", Management == "Thinning"), 
+    Var_order = rev(c("Low", "Moderate", "High"))
+    )
+
+
+```
