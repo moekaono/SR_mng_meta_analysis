@@ -5,7 +5,7 @@ date: "2025-04-25"
 output: html_document
 ---
 
-```{r setup, include=FALSE}
+```{r library, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 
 library(ggplot2)
@@ -34,7 +34,9 @@ library(rlang)
 ```
 
 ```{r CC cat comparison}
+##############
 # Severity
+#############
 CC_Resp_Severity <- list()
 
 # Define severity levels
@@ -105,7 +107,6 @@ CC_Resp_Season_results <-
                ~ (exp(1)^(.) - 1) * 100,
                .names = "{.col}_pct_change")
     )
-
 #write.csv(CC_Resp_Season_results, "G:/My Drive/Research/Projects/lit_review/Data/CC_Resp_Season_result.csv", row.names = F)
 
 CC_season_SR <- aov(ln_SR ~ Season, data = CC %>% filter(Season != "NA"))
@@ -199,12 +200,15 @@ CC_Resp_Leaf_results <-
 # ANOVA
 CC_Leaf_SR <- aov(ln_SR ~ Leaf_habit, data = CC %>% filter(Leaf_habit != "Mix"))
 summary(CC_Leaf_SR) 
+TukeyHSD(CC_Leaf_SR)
 
 CC_Leaf_Rh <- aov(ln_Rh ~ Leaf_habit, data = CC %>% filter(Leaf_habit != "Mix"))
 summary(CC_Leaf_Rh) 
+TukeyHSD(CC_Leaf_Rh)
 
 CC_Leaf_Ra <- aov(ln_Ra ~ Leaf_habit, data = CC %>% filter(Leaf_habit != "Mix"))
 summary(CC_Leaf_Ra) 
+TukeyHSD(CC_Leaf_Ra)
 
 ###########
 ### Climate
@@ -246,6 +250,14 @@ CC_Resp_Climate_results <-
 CC_Climate_SR <- aov(ln_SR ~ Climate_zone, data = CC)
 summary(CC_Climate_SR)
 TukeyHSD(CC_Climate_SR)
+
+CC_Climate_Rh <- aov(ln_Rh ~ Climate_zone, data = CC)
+summary(CC_Climate_Rh)
+
+CC_Climate_Ra <- aov(ln_Ra ~ Climate_zone, data = CC %>% filter(Climate_zone %in% c("Subtropical", "Temperate")))
+
+summary(CC_Climate_Ra)
+TukeyHSD(CC_Climate_Ra)
 
 ###########
 ### Residue
@@ -320,11 +332,10 @@ TH_Resp_Climate_results <-
 
 #write.csv(TH_Resp_Climate_results, "G:/My Drive/Research/Projects/lit_review/Data/TH_Climate_result.csv", row.names = F)
 
-TH_Climate_SR <- aov(ln_SR ~ Climate_zone, data = TH)
+TH_Climate_SR <- aov(ln_SR ~ Climate_zone, data = TH %>% filter(Climate_zone %in% c("Temperate", "Mediterranean")))
 summary(TH_Climate_SR)
-TukeyHSD(TH_Climate_SR)
 
-TH_Climate_Rh <- aov(ln_Rh ~ Climate_zone, data = TH)
+TH_Climate_Rh <- aov(ln_Rh ~ Climate_zone, data = TH %>% filter(Climate_zone %in% c("Temperate", "Mediterranean")))
 summary(TH_Climate_Rh)
 
 
@@ -552,6 +563,9 @@ TH_Resp_Residue_results <-
 
 #write.csv(TH_Resp_Residue_results, "G:/My Drive/Research/Projects/lit_review/Data/TH_Residue_result.csv", row.names = F)
 
+
+TH_Residue_SR <- aov(ln_SR ~ Residue, data = TH %>% filter(Residue != "NA"))
+summary(TH_Residue_SR) 
 ```
 
 
@@ -621,7 +635,6 @@ summary(PB_season_SR)
 #########
 # Forest type ##
 ########
-
 
 PB_Resp_Forest <- list()
 
@@ -766,20 +779,27 @@ cat_graph <- function(df, Var_order){
     color = color_group
   ), size = 5) +
   geom_errorbarh(aes(
-    y = factor(Var_kind, levels = Var_order),
-    xmin = Intercept_Lower_pct_change,
-    xmax = Intercept_Upper_pct_change,
-    color = color_group
-  ), height = 0.2, linewidth = 1.5) +
+      y = factor(Var_kind, levels = Var_order),
+      xmin = Intercept_Lower_pct_change,
+      xmax = Intercept_Upper_pct_change,
+      color = color_group), 
+    height = 0.2, linewidth = 1.5) +
   geom_vline(xintercept = 0, color = "black", size = 1.5, alpha = 0.4) +
   geom_text(aes(
     x = Intercept_Upper_pct_change + 20,
     y = factor(Var_kind, levels = Var_order),
     label = paste0(n_obs, " (", n_study, ")")
-  ),
-  vjust = 0.5, size = 4) +
+    ),
+    vjust = 0.5, size = 4) +
+  geom_text(aes(
+    x = Intercept_Upper_pct_change + 5,
+    y = factor(Var_kind, levels = Var_order),
+    label = significant
+    ),
+    vjust = 0.5, size = 4) +
   scale_color_identity(guide = "none") + 
-  xlab(expression("Effect Size (%)")) +
+  xlab("") +
+  #xlab(expression("Effect Size (%)")) +
   theme_classic2() +
   xlim(-100, 100) +
   theme(
@@ -794,7 +814,7 @@ cat_graph <- function(df, Var_order){
 
 ```
 
-```{r SR}
+```{r CC plot}
 #CC_SR
 p_CC_Climate_SR <- 
   cat_graph(
@@ -826,6 +846,34 @@ p_CC_Residue_SR <-
     rev(c("Residue", "No residue"))
     )
 
+# Turn off x-axis text and ticks for all but the last plot
+p_CC_Climate_SR  <- p_CC_Climate_SR + theme(axis.text.x = element_blank(),
+                                            axis.ticks.x = element_blank(),
+                                            axis.title.x = element_blank())
+p_CC_Forest_SR   <- p_CC_Forest_SR + theme(axis.text.x = element_blank(),
+                                           axis.ticks.x = element_blank(),
+                                           axis.title.x = element_blank())
+p_CC_Season_SR   <- p_CC_Season_SR + theme(axis.text.x = element_blank(),
+                                           axis.ticks.x = element_blank(),
+                                           axis.title.x = element_blank())
+p_CC_Severity_SR <- p_CC_Severity_SR + theme(axis.text.x = element_blank(),
+                                             axis.ticks.x = element_blank(),
+                                             axis.title.x = element_blank())
+
+
+# Combine plots with different heights
+(p_CC_Climate_SR / 
+ p_CC_Forest_SR / 
+ p_CC_Season_SR / 
+ p_CC_Severity_SR / 
+ p_CC_Residue_SR) +
+  plot_layout(heights = c(1.5, .6, 1.2, 0.9, 0.6), guides = "collect")
+
+```
+
+
+
+```{r TH fig}
 # TH_SR
 p_TH_Climate_SR <- 
   cat_graph(
@@ -856,6 +904,32 @@ p_TH_Residue_SR <-
     rev(c("Residue", "No residue"))
     )
 
+# Turn off x-axis text and ticks for all but the last plot
+p_TH_Climate_SR  <- p_TH_Climate_SR + theme(axis.text.x = element_blank(),
+                                            axis.ticks.x = element_blank(),
+                                            axis.title.x = element_blank())
+p_TH_Forest_SR   <- p_TH_Forest_SR + theme(axis.text.x = element_blank(),
+                                           axis.ticks.x = element_blank(),
+                                           axis.title.x = element_blank())
+p_TH_Season_SR   <- p_TH_Season_SR + theme(axis.text.x = element_blank(),
+                                           axis.ticks.x = element_blank(),
+                                           axis.title.x = element_blank())
+p_TH_Severity_SR <- p_TH_Severity_SR + theme(axis.text.x = element_blank(),
+                                             axis.ticks.x = element_blank(),
+                                             axis.title.x = element_blank())
+
+
+# Combine plots with different heights
+(p_TH_Climate_SR / 
+ p_TH_Forest_SR / 
+ p_TH_Season_SR / 
+ p_TH_Severity_SR / 
+ p_TH_Residue_SR) +
+  plot_layout(heights = c(.6, .6, 1.2, 0.9, 0.6), guides = "collect")
+```
+
+
+```{r PB plot}
 # PB_SR
 p_PB_Climate_SR <- 
   cat_graph(
@@ -878,14 +952,33 @@ p_PB_Season_SR <-
 p_PB_Repeat_SR <- 
   cat_graph(
     plot_cat_summary %>% filter(Resp == "SR", Var == "Repeat", Management == "Prescribed burn"), 
-    Var_order = rev(c("Repeated", "Single"))
+    Var_order = rev(c("Repeat", "Single"))
     )
+
+
+# Turn off x-axis text and ticks for all but the last plot
+p_PB_Climate_SR  <- p_PB_Climate_SR + theme(axis.text.x = element_blank(),
+                                            axis.ticks.x = element_blank(),
+                                            axis.title.x = element_blank())
+p_PB_Forest_SR   <- p_PB_Forest_SR + theme(axis.text.x = element_blank(),
+                                           axis.ticks.x = element_blank(),
+                                           axis.title.x = element_blank())
+p_PB_Season_SR   <- p_PB_Season_SR + theme(axis.text.x = element_blank(),
+                                           axis.ticks.x = element_blank(),
+                                           axis.title.x = element_blank())
+
+
+# Combine plots with different heights
+(p_PB_Climate_SR / 
+ p_PB_Forest_SR / 
+ p_PB_Season_SR / 
+ p_PB_Repeat_SR) +
+  plot_layout(heights = c(1.2, .6, 0.9, 0.6), guides = "collect")
 
 ```
 
 ```{r Rh & Ra}
 #CC
-
 p_CC_Forest_Rh <- 
   cat_graph(
     plot_cat_summary %>% filter(Resp == "Rh", Var == "Forest_type", Management == "Clearcut"), 
@@ -910,7 +1003,37 @@ p_CC_Climate_Ra <-
     Var_order = rev(c("Boreal", "Temperate", "Mediterranean", "Subtropical", "Tropical"))
     )
 
+# Turn off x-axis text and ticks for all but the last plot
+p_CC_Climate_Rh  <- p_CC_Climate_Rh + theme(axis.text.x = element_blank(),
+                                            axis.ticks.x = element_blank(),
+                                            axis.title.x = element_blank())
+p_CC_Forest_Rh   <- p_CC_Forest_Rh + theme(axis.text.x = element_blank(),
+                                           axis.ticks.x = element_blank(),
+                                           axis.title.x = element_blank())
+p_CC_Climate_Ra  <- p_CC_Climate_Ra + theme(axis.text.x = element_blank(),
+                                            axis.ticks.x = element_blank(),
+                                            axis.title.x = element_blank())
+
+# Combine plots with different heights
+(p_CC_Climate_Rh / 
+ p_CC_Climate_Ra / 
+ p_CC_Forest_Rh / 
+ p_CC_Forest_Ra) +
+  plot_layout(guides = "collect")
+
+
+
+```
+
+
+```{r}
 # TH
+p_TH_Season_Rh <- 
+  cat_graph(
+    plot_cat_summary %>% filter(Resp == "Rh", Var == "Season", Management == "Thinning"), 
+    Var_order = rev(c("Spring", "Summer", "Fall", "Winter"))
+    )
+
 p_TH_Severity_Rh <- 
   cat_graph(
     plot_cat_summary %>% filter(Resp == "Rh", Var == "Severity", Management == "Thinning"), 
@@ -922,5 +1045,20 @@ p_TH_Severity_Ra <-
     Var_order = rev(c("Low", "Moderate", "High"))
     )
 
+# Turn off x-axis text and ticks for all but the last plot
+
+p_TH_Season_Rh   <- p_TH_Season_Rh + theme(axis.text.x = element_blank(),
+                                           axis.ticks.x = element_blank(),
+                                           axis.title.x = element_blank())
+p_TH_Severity_Rh <- p_TH_Severity_Rh + theme(axis.text.x = element_blank(),
+                                             axis.ticks.x = element_blank(),
+                                             axis.title.x = element_blank())
+
+
+# Combine plots with different heights
+(p_TH_Season_Rh / 
+ p_TH_Severity_Rh / 
+ p_TH_Severity_Ra) +
+  plot_layout(heights = c(.6, .9, 0.9), guides = "collect")
 
 ```

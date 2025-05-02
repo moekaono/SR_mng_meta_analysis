@@ -17,7 +17,7 @@ REF: https://datavizpyr.com/how-to-make-world-map-with-ggplot2-in-r/#google_vign
 
 ```{r distribution of studies}
 lit_raw <- 
-  readxl::read_xlsx("G:/My Drive/Research/Projects/lit_review/lit_review_2025.xlsx", sheet = "data_LRR")
+  readxl::read_xlsx("G:/My Drive/Research/Projects/lit_review/Data/lit_review_2025.xlsx", sheet = "data_LRR")
   
 # create data for world coordinates using 
 # map_data() function
@@ -31,11 +31,18 @@ world_map <-
   
 world_map + geom_point(
     data = lit, 
-    aes(Longtitude, Latitude, color = Management_type), 
+    aes(Longitude, Latitude, color = Management_type), 
     alpha = 0.6, size = 3
     ) + 
   #ggtitle("Study Site Locations in the meta analysis")+
   theme_bw() +
+  scale_color_manual(
+    values = c(
+            "Clearcut" = "#FFBA49",
+            "Prescribed burn" = "#EF5B5B",
+            "Thinning" = "#20A39E"
+            )
+    ) +
   theme(
     axis.title.x = element_blank(),
     axis.text.x = element_text(size =20),

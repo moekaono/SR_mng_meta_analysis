@@ -1,0 +1,144 @@
+---
+title: "model selection"
+author: "MOEKA"
+date: "2025-05-01"
+output: html_document
+---
+
+```{r library, include=FALSE}
+
+library(dplyr)
+library(glmulti)
+library(purrr)
+library(rJava)
+```
+
+Check the NA values. ~40% as thresholds?
+
+```{r model selection}
+
+prednames <- c("Latitude", "MAT", "MAP",
+               "Climate_zone", "Forest_type", #"Leaf_habit",
+               "Time_since", "Severity_level", "Season")
+
+# CC
+res_CC_SR <- 
+  glmulti(
+    "ln_SR", xr = c(prednames, "Residue"), 
+    data = CC %>% select(c(prednames, "Residue"), ln_SR) %>% mutate(across(where(~ !is.numeric(.)), as.factor)), 
+    level = 1,
+    crit = "aicc",
+    plotty = F
+    )
+plot(res_CC_SR, type = "s")
+
+res_CC_Rh <- 
+  glmulti(
+    "ln_Rh", xr = c(prednames, "Residue"), 
+    data = CC %>% select(all_of(c(prednames, "Residue")), ln_Rh) %>% mutate(across(where(~ !is.numeric(.)), as.factor)), 
+    level = 1,
+    crit = "aicc",
+    plotty = F
+    )
+plot(res_CC_Rh, type = "s")
+
+# CC_Ra
+res_CC_Ra <- 
+  glmulti(
+    "ln_Ra", xr = c(prednames, "Residue"), 
+    data = CC %>% select(all_of(c(prednames, "Residue")), ln_Ra) %>% mutate(across(where(~ !is.numeric(.)), as.factor)), 
+    level = 1,
+    crit = "aicc",
+    plotty = F
+    )
+
+plot(res_CC_Ra, type = "s")
+
+# PB - Rh and Ra are too small sample size
+res_PB_SR <- 
+  glmulti(
+    "ln_SR", xr = c(prednames, "Severity_level", "Repeat"), 
+    data = PB %>% select(all_of(c(prednames, "Severity_level", "Repeat")), ln_SR, Severity_level, Repeat) %>% mutate(across(where(~ !is.numeric(.)), as.factor)), 
+    level = 1,
+    crit = "aicc",
+    plotty = F
+    )
+  
+plot(res_PB_SR, type = "s")
+
+
+# TH
+res_TH_SR <- 
+  glmulti(
+    "ln_SR", xr = c(prednames, "Severity_level"), 
+    data = TH %>% select(all_of(c(prednames, "Severity_level")), ln_SR, Severity_level, Repeat) %>% mutate(across(where(~ !is.numeric(.)), as.factor)), 
+    level = 1,
+    crit = "aicc",
+    plotty = F
+    )
+
+plot(res_TH_SR, type = "s")
+
+
+res_TH_Rh <- 
+  glmulti(
+    "ln_Rh", xr = setdiff(c(prednames, "Severity_level", "Repeat"), "Forest_type"), 
+    data = TH %>% select(all_of(setdiff(c(prednames, "Severity_level", "Repeat"), "Forest_type")), ln_Rh, Severity_level, Repeat) %>% mutate(across(where(~ !is.numeric(.)), as.factor)), 
+    level = 1,
+    crit = "aicc",
+    plotty = F
+    )
+
+plot(res_TH_Rh, type = "s")
+
+
+res_TH_Ra <- 
+  glmulti(
+    "ln_Ra", xr = setdiff(c(prednames, "Severity_level", "Repeat"), "Forest_type"), 
+    data = TH %>% select(all_of(setdiff(c(prednames, "Severity_level", "Repeat"), "Forest_type")), ln_Ra, Severity_level, Repeat) %>% mutate(across(where(~ !is.numeric(.)), as.factor)), 
+    level = 1,
+    crit = "aicc",
+    plotty = F
+    )
+
+plot(res_TH_Ra, type = "s")
+```
+
+```{r model selection function}
+summarize_glmulti <- function(glmulti_obj, run_name = NA_character_) {
+    best_model <- glmulti_obj@formulas[[1]]
+    all_ics <- glmulti_obj@crits
+    
+    best_ic <- min(all_ics)
+    
+    data.frame(
+        Run = run_name,
+        Best_Model = paste(deparse(best_model), collapse = ""),
+        Best_IC = best_ic,
+        Mean_IC = mean(all_ics),
+        Min_IC = min(all_ics),
+        Max_IC = max(all_ics),
+        N_models = length(all_ics),
+        N_models_within_2 = sum(all_ics <= best_ic + 2)
+    )
+}
+
+# Create a named list of glmulti results
+glmulti_results <- list(
+  CC_SR = res_CC_SR,
+  CC_Rh = res_CC_Rh,
+  CC_Ra = res_CC_Ra,
+  PB_SR = res_PB_SR,
+  TH_SR = res_TH_SR,
+  TH_Rh = res_TH_Rh,
+  TH_Ra = res_TH_Ra
+)
+
+# Apply summarization function and bind rows
+model_selection_summary <- map_dfr(
+  names(glmulti_results),
+  ~ summarize_glmulti(glmulti_results[[.x]], run_name = .x)
+)
+
+#write.csv(model_selection_summary, "G:/My Drive/Research/Projects/lit_review/Data/model_selection.csv", row.names = F)
+```

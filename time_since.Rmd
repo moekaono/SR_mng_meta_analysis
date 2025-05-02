@@ -1,0 +1,75 @@
+---
+title: "time since year"
+author: "MOEKA"
+date: "2025-05-01"
+output: html_document
+---
+
+```{r library}
+library(ggplot2)
+library(dplyr)
+library(patchwork)
+```
+
+```{r read df}
+lit_effect <- read.csv("G:/My Drive/Research/Projects/lit_review/Data/Ln_RR_raw.csv")
+```
+
+```{r time since practices}
+
+# Iterate through each res variable and plot against each var variable
+plot_list <- list()
+
+for (res in Resp_Components) {
+    p <- ggplot(
+        lit_effect %>% 
+          mutate(Management_type = factor(Management_type, levels = rev(c("Clearcut", "Prescribed burn", "Thinning")))), 
+        aes(x = Time_since, y = .data[[res]], weight = Wt, color = Management_type)) +
+        geom_point(aes(size = Wt), shape = 1, stroke = 1.5, alpha = 0.3, show.legend = FALSE) +
+        stat_poly_line(aes(group = Management_type, fill = after_scale(color)), se = TRUE, size = 2, alpha = 0.2) +
+        stat_poly_eq(
+            aes(label = paste(after_stat(eq.label),
+                              after_stat(p.value.label),
+                              sep = "~~~"),
+                group = Management_type),
+            formula = y ~ x,
+            parse = TRUE,
+            size = 5,
+            coef.digits = 2,
+            p.digits = 2,
+            label.x.npc = "right",
+            label.y.npc = "bottom",
+            method = "lm"
+        ) +
+        geom_hline(yintercept = 0, color = "black", size = 1, alpha = 0.4, linetype = 'dotted') +
+        theme_classic() +
+        scale_color_manual(
+          values = c(
+            "Clearcut" = "#FFBA49",
+            "Prescribed burn" = "#EF5B5B",
+            "Thinning" = "#20A39E"
+            )
+          ) +
+        theme(
+            axis.title.x = element_text(size = 20),
+            axis.text.x = element_text(size = 20),
+            axis.title.y = element_text(size = 20),
+            axis.text.y = element_text(size = 20),
+            panel.border = element_rect(colour = "black", fill = NA, linewidth = 0.5)
+        )
+    
+    plot_list[[res]] <- p
+}
+
+# Combine with shared legend and title
+wrap_plots(plot_list, ncol = 3, guides = "collect") &
+    theme(
+      legend.position = "right",
+      legend.text = element_text(size = 16),
+    legend.title = element_text(size = 16)
+      )# &
+    #plot_annotation(title = "Relationships between Time since and Response Variables")
+
+
+
+```

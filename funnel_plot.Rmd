@@ -1,0 +1,60 @@
+---
+title: "funnel plot"
+author: "MOEKA"
+date: "2025-05-01"
+output: html_document
+---
+```{r library}
+library(stats)
+library(ggplot2)
+library(dplyr)
+```
+
+```{r read df}
+lit_effect <- read.csv("G:/My Drive/Research/Projects/lit_review/Data/Ln_RR_raw.csv")
+```
+
+```{r funnel plot}
+lit_effect %>% 
+  ggplot(aes(ln_SR, Wt)) + 
+  geom_vline(xintercept = 0, linetype = "dashed", color = "black") +
+  geom_point() +
+  theme_classic() +
+  labs(x = "Effect size (lnSR)",
+         y = "Weight") +
+  theme(
+    axis.title.x = element_text(size = 20),
+    axis.text.x = element_text(size = 20),
+    axis.title.y = element_text(size = 20),
+    axis.text.y = element_text(size = 20),
+    legend.position = "none",
+    panel.border = element_rect(colour = "black", fill = NA, linewidth = .5)
+  )
+  
+
+lit_effect %>% 
+  ggplot(aes(ln_Rh, Wt)) + geom_point()
+
+lit_effect %>% 
+  ggplot(aes(ln_Ra, Wt)) + geom_point()
+
+
+# Egger's test
+df <- lit_effect %>% 
+  filter(!is.na(ln_SR)) %>% 
+  mutate(
+    std_ES = ln_SR * sqrt(Wt),
+    precision = sqrt(Wt)
+    ) 
+
+egger_model_SR <- lm(std_ES ~ precision, data = df)  
+
+# Extract model summary
+sum_egger <- summary(egger_model_SR)
+
+# Get coefficient table (Estimate and Std. Error)
+coef_table <- coef(sum_egger)
+
+# Z-value for intercept (first row)
+z_intercept <- coef_table["(Intercept)", "Estimate"] / coef_table["(Intercept)", "Std. Error"]
+```
