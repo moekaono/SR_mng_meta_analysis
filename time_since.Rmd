@@ -13,6 +13,14 @@ library(patchwork)
 
 ```{r read df}
 lit_effect <- read.csv("G:/My Drive/Research/Projects/lit_review/Data/Ln_RR_raw.csv")
+
+lit_effect_per <- 
+  lit_effect %>% 
+  mutate(
+    across(ln_SR:ln_Ra, 
+           ~(exp(1) ^ (.) - 1) * 100,
+           .names = "{.col}_pct_change")
+        )
 ```
 
 ```{r time since practices}
@@ -20,9 +28,9 @@ lit_effect <- read.csv("G:/My Drive/Research/Projects/lit_review/Data/Ln_RR_raw.
 # Iterate through each res variable and plot against each var variable
 plot_list <- list()
 
-for (res in Resp_Components) {
+for (res in c("ln_SR_pct_change", "ln_Rh_pct_change", "ln_Ra_pct_change")) {
     p <- ggplot(
-        lit_effect %>% 
+        lit_effect_per %>% 
           mutate(Management_type = factor(Management_type, levels = rev(c("Clearcut", "Prescribed burn", "Thinning")))), 
         aes(x = Time_since, y = .data[[res]], weight = Wt, color = Management_type)) +
         geom_point(aes(size = Wt), shape = 1, stroke = 1.5, alpha = 0.3, show.legend = FALSE) +
@@ -53,10 +61,11 @@ for (res in Resp_Components) {
         theme(
             axis.title.x = element_text(size = 20),
             axis.text.x = element_text(size = 20),
-            axis.title.y = element_text(size = 20),
+            axis.title.y = element_blank(),
             axis.text.y = element_text(size = 20),
             panel.border = element_rect(colour = "black", fill = NA, linewidth = 0.5)
-        )
+        ) +
+      ylim(-150, 150) 
     
     plot_list[[res]] <- p
 }
