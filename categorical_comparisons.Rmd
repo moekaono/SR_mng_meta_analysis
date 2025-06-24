@@ -78,7 +78,7 @@ CC_Resp_Severity_results <-
                .names = "{.col}_pct_change")
     )
 
-#write.csv(CC_Resp_Severity_results, "G:/My Drive/Research/Projects/lit_review/Data/CC_severity_result.csv", row.names = F)
+#write.csv(CC_Resp_Severity_results, "G:/My Drive/Research/Projects/SR_meta_analysis/Data/cat_ind/CC_severity_result.csv", row.names = F)
 
 
 CC_severity_SR <- aov(ln_SR ~ Severity_level, data = CC %>% filter(!Severity_level == "High" & !Severity_level == "NA"))
@@ -116,7 +116,7 @@ CC_Resp_Season_results <-
                ~ (exp(1)^(.) - 1) * 100,
                .names = "{.col}_pct_change")
     )
-#write.csv(CC_Resp_Season_results, "G:/My Drive/Research/Projects/lit_review/Data/CC_Resp_Season_result.csv", row.names = F)
+#write.csv(CC_Resp_Season_results, "G:/My Drive/Research/Projects/SR_meta_analysis/Data/cat_ind/CC_Resp_Season_result.csv", row.names = F)
 
 CC_season_SR <- aov(ln_SR ~ Season, data = CC %>% filter(Season != "NA"))
 summary(CC_season_SR) 
@@ -155,7 +155,7 @@ CC_Resp_Forest_results <-
     ) %>% 
   mutate(Response = factor(Response, levels = c("ln_SR", "ln_Rh", "ln_Ra")))
 
-#write.csv(CC_Resp_Forest_results, "G:/My Drive/Research/Projects/lit_review/Data/CC_Resp_Forest_result.csv", row.names = F)
+#write.csv(CC_Resp_Forest_results, "G:/My Drive/Research/Projects/SR_meta_analysis/Data/cat_ind/CC_Resp_Forest_result.csv", row.names = F)
 
 
 # ANOVA
@@ -203,19 +203,19 @@ CC_Resp_Leaf_results <-
     ) %>% 
   mutate(Response = factor(Response, levels = c("ln_SR", "ln_Rh", "ln_Ra")))
 
-#write.csv(CC_Resp_Leaf_results, "G:/My Drive/Research/Projects/lit_review/Data/CC_Resp_Leaf_result.csv", row.names = F)
+#write.csv(CC_Resp_Leaf_results, "G:/My Drive/Research/Projects/SR_meta_analysis/Data/cat_ind/CC_Resp_Leaf_result.csv", row.names = F)
 
 
 # ANOVA
-CC_Leaf_SR <- aov(ln_SR ~ Leaf_habit, data = CC %>% filter(Leaf_habit != "Mix"))
-summary(CC_Leaf_SR) 
-TukeyHSD(CC_Leaf_SR)
+CC_Leaf_SR <- aov(ln_SR ~ Leaf_habit, data = CC)
+summary(CC_Leaf_SR)
+TukeyHSD(CC_Leaf_SR) 
 
-CC_Leaf_Rh <- aov(ln_Rh ~ Leaf_habit, data = CC %>% filter(Leaf_habit != "Mix"))
+CC_Leaf_Rh <- aov(ln_Rh ~ Leaf_habit, data = CC)
 summary(CC_Leaf_Rh) 
 TukeyHSD(CC_Leaf_Rh)
 
-CC_Leaf_Ra <- aov(ln_Ra ~ Leaf_habit, data = CC %>% filter(Leaf_habit != "Mix"))
+CC_Leaf_Ra <- aov(ln_Ra ~ Leaf_habit, data = CC)
 summary(CC_Leaf_Ra) 
 TukeyHSD(CC_Leaf_Ra)
 
@@ -254,7 +254,7 @@ CC_Resp_Climate_results <-
     ) %>% 
   mutate(Response = factor(Response, levels = c("ln_SR", "ln_Rh", "ln_Ra")))
 
-#write.csv(CC_Resp_Climate_results, "G:/My Drive/Research/Projects/lit_review/Data/CC_Climate_result.csv", row.names = F)
+#write.csv(CC_Resp_Climate_results, "G:/My Drive/Research/Projects/SR_meta_analysis/Data/cat_ind/CC_Climate_result.csv", row.names = F)
 
 CC_Climate_SR <- aov(ln_SR ~ Climate_zone, data = CC)
 summary(CC_Climate_SR)
@@ -263,8 +263,7 @@ TukeyHSD(CC_Climate_SR)
 CC_Climate_Rh <- aov(ln_Rh ~ Climate_zone, data = CC)
 summary(CC_Climate_Rh)
 
-CC_Climate_Ra <- aov(ln_Ra ~ Climate_zone, data = CC %>% filter(Climate_zone %in% c("Subtropical", "Temperate")))
-
+CC_Climate_Ra <- aov(ln_Ra ~ Climate_zone, data = CC)
 summary(CC_Climate_Ra)
 TukeyHSD(CC_Climate_Ra)
 
@@ -299,10 +298,16 @@ CC_Resp_Residue_results <-
     ) %>% 
   mutate(Response = factor(Response, levels = c("ln_SR", "ln_Rh", "ln_Ra")))
 
-#write.csv(CC_Resp_Residue_results, "G:/My Drive/Research/Projects/lit_review/Data/CC_Residue_result.csv", row.names = F)
+#write.csv(CC_Resp_Residue_results, "G:/My Drive/Research/Projects/SR_meta_analysis/Data/cat_ind/CC_Residue_result.csv", row.names = F)
 
 CC_Residue_SR <- aov(ln_SR ~ Residue, data = CC)
 summary(CC_Residue_SR)
+
+CC_Residue_Rh <- aov(ln_Rh ~ Residue, data = CC)
+summary(CC_Residue_Rh)
+
+CC_Residue_Ra <- aov(ln_Ra ~ Residue, data = CC)
+summary(CC_Residue_Ra)
 ```
 
 ```{r TH cat comparison}
@@ -339,7 +344,7 @@ TH_Resp_Climate_results <-
     ) %>% 
   mutate(Response = factor(Response, levels = c("ln_SR", "ln_Rh", "ln_Ra")))
 
-#write.csv(TH_Resp_Climate_results, "G:/My Drive/Research/Projects/lit_review/Data/TH_Climate_result.csv", row.names = F)
+#write.csv(TH_Resp_Climate_results, "G:/My Drive/Research/Projects/SR_meta_analysis/Data/cat_ind/TH_Climate_result.csv", row.names = F)
 
 TH_Climate_SR <- aov(ln_SR ~ Climate_zone, data = TH %>% filter(Climate_zone %in% c("Temperate", "Mediterranean")))
 summary(TH_Climate_SR)
@@ -376,7 +381,7 @@ TH_Resp_Season_results <-
                .names = "{.col}_pct_change")
     )
 
-#write.csv(TH_Resp_Season_results, "G:/My Drive/Research/Projects/lit_review/Data/TH_Resp_Season_result.csv", row.names = F)
+#write.csv(TH_Resp_Season_results, "G:/My Drive/Research/Projects/SR_meta_analysis/Data/cat_ind/TH_Resp_Season_result.csv", row.names = F)
 
 # ANOVA
 TH_season_SR <- aov(ln_SR ~ Season, data = TH %>% filter(Season != "NA"))
@@ -414,7 +419,7 @@ TH_Resp_Repeat_results <-
                .names = "{.col}_pct_change")
     )
 
-#write.csv(TH_Resp_Repeat_results, "G:/My Drive/Research/Projects/lit_review/Data/TH_Resp_Repeat_result.csv", row.names = F)
+#write.csv(TH_Resp_Repeat_results, "G:/My Drive/Research/Projects/SR_meta_analysis/Data/cat_ind/TH_Resp_Repeat_result.csv", row.names = F)
 
 ##########
 # Severity
@@ -450,7 +455,7 @@ TH_Resp_Severity_results <-
     ) %>% 
   mutate(Response = factor(Response, levels = c("ln_SR", "ln_Rh", "ln_Ra")))
 
-#write.csv(TH_Resp_Severity_results, "G:/My Drive/Research/Projects/lit_review/Data/TH_severity_result.csv", row.names = F)
+#write.csv(TH_Resp_Severity_results, "G:/My Drive/Research/Projects/SR_meta_analysis/Data/cat_ind/TH_severity_result.csv", row.names = F)
 
 # ANOVA
 TH_severity_SR <- aov(ln_SR ~ Severity_level, data = TH %>% filter(Severity_level != "NA"))
@@ -496,7 +501,7 @@ TH_Resp_Forest_results <-
     ) %>% 
   mutate(Response = factor(Response, levels = c("ln_SR", "ln_Rh", "ln_Ra")))
 
-#write.csv(TH_Resp_Forest_results, "G:/My Drive/Research/Projects/lit_review/Data/TH_Resp_Forest_result.csv", row.names = F)
+#write.csv(TH_Resp_Forest_results, "G:/My Drive/Research/Projects/SR_meta_analysis/Data/cat_ind/TH_Resp_Forest_result.csv", row.names = F)
 
 
 TH_forest_SR <- aov(ln_SR ~ Forest_type, data = TH)
@@ -534,7 +539,7 @@ TH_Resp_Leaf_results <-
     ) %>% 
   mutate(Response = factor(Response, levels = c("ln_SR", "ln_Rh", "ln_Ra")))
 
-#write.csv(TH_Resp_Leaf_results, "G:/My Drive/Research/Projects/lit_review/Data/TH_Resp_Leaf_result.csv", row.names = F)
+#write.csv(TH_Resp_Leaf_results, "G:/My Drive/Research/Projects/SR_meta_analysis/Data/cat_ind/TH_Resp_Leaf_result.csv", row.names = F)
 
 TH_Leaf_SR <- aov(ln_SR ~ Leaf_habit, data = TH %>% filter(Leaf_habit != "Mix"))
 summary(TH_Leaf_SR) 
@@ -570,7 +575,7 @@ TH_Resp_Residue_results <-
     ) %>% 
   mutate(Response = factor(Response, levels = c("ln_SR", "ln_Rh", "ln_Ra")))
 
-#write.csv(TH_Resp_Residue_results, "G:/My Drive/Research/Projects/lit_review/Data/TH_Residue_result.csv", row.names = F)
+#write.csv(TH_Resp_Residue_results, "G:/My Drive/Research/Projects/SR_meta_analysis/Data/cat_ind/TH_Residue_result.csv", row.names = F)
 
 
 TH_Residue_SR <- aov(ln_SR ~ Residue, data = TH %>% filter(Residue != "NA"))
@@ -606,7 +611,7 @@ PB_Resp_Severity_results <-
                .names = "{.col}_pct_change")
     )
 
-#write.csv(PB_Resp_Severity_results, "G:/My Drive/Research/Projects/lit_review/Data/PB_severity_result.csv", row.names = F)
+#write.csv(PB_Resp_Severity_results, "G:/My Drive/Research/Projects/SR_meta_analysis/Data/cat_ind/PB_severity_result.csv", row.names = F)
 
 ##########
 # Season
@@ -636,7 +641,7 @@ PB_Resp_Season_results <-
                .names = "{.col}_pct_change")
     )
 
-#write.csv(PB_Resp_Season_results, "G:/My Drive/Research/Projects/lit_review/Data/PB_Resp_Season_result.csv", row.names = F)
+#write.csv(PB_Resp_Season_results, "G:/My Drive/Research/Projects/SR_meta_analysis/Data/cat_ind/PB_Resp_Season_result.csv", row.names = F)
 
 PB_season_SR <- aov(ln_SR ~ Season, data = PB %>% filter(Season != "NA"))
 summary(PB_season_SR) 
@@ -671,7 +676,7 @@ PB_Resp_Forest_results <-
     ) %>% 
   mutate(Response = factor(Response, levels = c("ln_SR", "ln_Rh", "ln_Ra")))
 
-#write.csv(PB_Resp_Forest_results, "G:/My Drive/Research/Projects/lit_review/Data/PB_Resp_Forest_result.csv", row.names = F)
+#write.csv(PB_Resp_Forest_results, "G:/My Drive/Research/Projects/SR_meta_analysis/Data/cat_ind/PB_Resp_Forest_result.csv", row.names = F)
 
 # ANOVA
 PB_forest_SR <- aov(ln_SR ~ Forest_type, data = PB)
@@ -713,7 +718,7 @@ PB_Resp_Climate_results <-
     ) %>% 
   mutate(Response = factor(Response, levels = c("ln_SR", "ln_Rh", "ln_Ra")))
 
-#write.csv(PB_Resp_Climate_results, "G:/My Drive/Research/Projects/lit_review/Data/PB_Climate_result.csv", row.names = F)
+#write.csv(PB_Resp_Climate_results, "G:/My Drive/Research/Projects/SR_meta_analysis/Data/cat_ind/PB_Climate_result.csv", row.names = F)
 
 
 PB_Climate_SR <- aov(ln_SR ~ Climate_zone, data = PB)
@@ -754,7 +759,7 @@ PB_Resp_Repeat_results <-
     ) %>% 
   mutate(Response = factor(Response, levels = c("ln_SR", "ln_Rh", "ln_Ra")))
 
-#write.csv(PB_Resp_Repeat_results, "G:/My Drive/Research/Projects/lit_review/Data/PB_Repeat_result.csv", row.names = F)
+#write.csv(PB_Resp_Repeat_results, "G:/My Drive/Research/Projects/SR_meta_analysis/Data/cat_ind/PB_Repeat_result.csv", row.names = F)
 
 PB_Repeat_SR <- aov(ln_SR ~ Repeat, data = PB)
 summary(PB_Repeat_SR)
@@ -824,7 +829,7 @@ cat_graph <- function(df, title){
 
 ```
 
-```{r plot}
+```{r SR plot}
 #CC_SR
 p1 <- 
   plot_cat_summary %>%
@@ -847,4 +852,38 @@ p3 <-
 
 library(patchwork)
 p1 + p2 + p3
+```
+
+```{r comp plot}
+#CC_Rh
+p4 <- 
+  plot_cat_summary %>%
+  filter(Management == "Clearcut", Resp == "Rh") %>%
+  filter(Var == "Forest_type") %>% 
+  cat_graph(title = "Clearcut (Rh)") 
+
+#CC_Ra
+p5 <- 
+  plot_cat_summary %>%
+  filter(Management == "Clearcut", Resp == "Ra") %>%
+  filter(Var == "Forest_type") %>% 
+  cat_graph(title = "Clearcut (Ra)") 
+
+
+#TH_Rh
+p6 <- 
+  plot_cat_summary %>%
+  filter(Management == "Thinning", Resp == "Rh") %>%
+  filter(Var %in% c("Season", "Severity")) %>% 
+  cat_graph(title = "Thinning (Rh)") 
+
+# TH_Ra
+p7 <- 
+  plot_cat_summary %>%
+  filter(Management == "Thinning", Resp == "Ra") %>%
+  filter(Var %in% c("Severity")) %>% 
+  cat_graph(title = "Thinning (Ra)") 
+
+
+(p4 + p6) / (p5 + p7)
 ```
