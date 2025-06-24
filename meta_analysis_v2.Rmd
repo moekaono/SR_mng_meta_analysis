@@ -35,7 +35,7 @@ library(rlang)
 
 ```{r read & clean dataset}
 lit_raw <- 
-  readxl::read_xlsx("G:/My Drive/Research/Projects/lit_review/data/lit_review_2025.xlsx", sheet = "data_raw")
+  readxl::read_xlsx("G:/My Drive/Research/Projects/SR_meta_analysis/data/lit_review_2025.xlsx", sheet = "data_raw")
 
 summary(lit_raw)
 
@@ -58,7 +58,7 @@ lit %>%
 
 ```{r Effect size}
 # Identify treatment columns excluding "T_rep_n"
-treatment_cols <- setdiff(grep("^T_", names(lit), value = TRUE), "T_rep_n")
+treatment_cols <- setdiff(grep("^T_", names(lit), value = T), "T_rep_n")
 
 # Compute log effect size
 lit_effect <- lit %>%
@@ -68,7 +68,7 @@ lit_effect <- lit %>%
   rename_with(~ sub("^ln_T_", "ln_", .), starts_with("ln_T_")) %>%
   mutate(across(starts_with("ln_"), ~ replace(., is.infinite(.), NA)))
 
-#write.csv(lit_effect, "G:/My Drive/Research/Projects/lit_review/Data/Ln_RR_raw.csv", row.names = F)
+#write.csv(lit_effect, "G:/My Drive/Research/Projects/SR_meta_analysis/Data/Ln_RR_raw.csv", row.names = F)
 ```
 
 ```{r mixed effects model for vars}
@@ -144,6 +144,7 @@ Response_vars <-
 
 
 results_list <- list()
+
 for(mng in names(Mng_types)){
   for (resp in Response_vars) {
     results_list[[paste(mng, resp, sep = "_")]] <- run_boot_lmer(Mng_types[[mng]], resp)
@@ -158,9 +159,9 @@ summary_table <-
            .names = "{.col}_pct_change")
         )
   
-#write.csv(summary_table, "G:/My Drive/Research/Projects/lit_review/Data/Ln_RR_summary.csv", row.names = F)
+#write.csv(summary_table, "G:/My Drive/Research/Projects/SR_meta_analysis/Data/Ln_RR_summary.csv", row.names = F)
 
-#summary_table <- read.csv("G:/My Drive/Research/Projects/lit_review/Data/Ln_RR_summary.csv")
+#summary_table <- read.csv("G:/My Drive/Research/Projects/SR_meta_analysis/Data/Ln_RR_summary.csv")
 ```
 
 
@@ -269,6 +270,15 @@ ggplot(plot_df) +
   facet_wrap(~ factor(Management, levels = c("Clearcut", "Thinning", "Prescribed burn")), nrow = 1, ncol = 4)
 
 ```
+
+
+
+
+
+
+
+
+
 
 ```{r individual difference}
 # under CC, ln_Rh vs ln_Ra
@@ -443,7 +453,22 @@ lmer_result_summary <-
 #xlsx::write.xlsx(lmer_result_summary, "G:/My Drive/Research/Projects/lit_review/Data/lmer_result.xlsx", row.names = F)
 ```
 
+```{r corr ggplot}
 
+ggplot_templete <- function(data, var1, var2){
+  p <- 
+    ggplot(data, aes({{var1}}, {{var2}})) + 
+    geom_hline(yintercept = 0, color = "black", size = 1.5, alpha = 0.4) +
+    geom_vline(xintercept = 0, color = "black", size = 1.5, alpha = 0.4) +
+    geom_point(aes(size = Wt), shape = 1) + 
+    geom_smooth(method = lm, se = TRUE) + 
+    stat_poly_eq(use_label(c("eq", "R2", "P"))) +
+    theme_bw() +
+    guides(size = "none")  # remove size legend
+  
+  return(p)
+}
+```
 
 ```{r corr every vars}
 env_var <- setdiff(Response_vars, vars)
@@ -460,7 +485,7 @@ for (res in vars) {
     }
 }
 # Break the plot list into 3 groups of 25
-plot_chunks_CC <- split(plot_list_CC, ceiling(seq_along(plot_list_CC) / 25))
+plot_chunks_CC <- split(plot_list_CC, ceiling(seq_along(plot_list_CC) / 20))
 
 # View each page
 for (i in seq_along(plot_chunks_CC)) {
@@ -478,7 +503,7 @@ for (res in vars) {
     }
 }
 # Break the plot list into 3 groups of 25
-plot_chunks_PB <- split(plot_list_PB, ceiling(seq_along(plot_list_PB) / 25))
+plot_chunks_PB <- split(plot_list_PB, ceiling(seq_along(plot_list_PB) / 20))
 
 # View each page
 for (i in seq_along(plot_chunks_PB)) {
@@ -497,7 +522,7 @@ for (res in vars) {
     }
 }
 # Break the plot list into 3 groups of 25
-plot_chunks_TH <- split(plot_list_TH, ceiling(seq_along(plot_list_TH) / 25))
+plot_chunks_TH <- split(plot_list_TH, ceiling(seq_along(plot_list_TH) / 20))
 
 # View each page
 for (i in seq_along(plot_chunks_TH)) {
