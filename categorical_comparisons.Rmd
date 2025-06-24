@@ -33,11 +33,20 @@ library(stringr)
 library(rlang)
 ```
 
+```{r read dfs}
+lit_effect <- read.csv("G:/My Drive/Research/Projects/SR_meta_analysis/Data/Ln_RR_raw.csv")
+
+# Management type
+CC <- lit_effect %>% filter(Management_type == "Clearcut")
+PB <- lit_effect %>% filter(Management_type == "Prescribed burn")
+TH <- lit_effect %>% filter(Management_type == "Thinning")
+```
+
 ```{r CC cat comparison}
 ##############
 # Severity
 #############
-CC_Resp_Severity <- list()
+CC_Resp_Severity <- list() 
 
 # Define severity levels
 CC_Severity <- c(Stem = "S", WT = "WT", WTS = "WTS", WTSC = "WTSC")
@@ -753,8 +762,8 @@ summary(PB_Repeat_SR)
 ```
 
 
-```{r read df}
-cat_summary <- read.csv("G:/My Drive/Research/Projects/lit_review/Data/cat_summary.csv")
+```{r read summary df}
+cat_summary <- read.csv("G:/My Drive/Research/Projects/SR_meta_analysis/Data/cat_summary.csv")
 
 plot_cat_summary <- 
    cat_summary %>%
@@ -770,295 +779,72 @@ plot_cat_summary <-
 
 
 ```{r graph function}
-
-cat_graph <- function(df, Var_order){
+cat_graph <- function(df, title){
+  df$Var_kind <- factor(df$Var_kind, levels = rev(unique(df$Var_kind)))  # preserve order in df
   ggplot(df) +
-  geom_point(aes(
-    x = Intercept_pct_change,
-    y = factor(Var_kind, levels = Var_order),
-    color = color_group
-  ), size = 5) +
-  geom_errorbarh(aes(
-      y = factor(Var_kind, levels = Var_order),
-      xmin = Intercept_Lower_pct_change,
-      xmax = Intercept_Upper_pct_change,
-      color = color_group), 
-    height = 0.2, linewidth = 1.5) +
-  geom_vline(xintercept = 0, color = "black", size = 1.5, alpha = 0.4) +
-  geom_text(aes(
-    x = Intercept_Upper_pct_change + 20,
-    y = factor(Var_kind, levels = Var_order),
-    label = paste0(n_obs, " (", n_study, ")")
-    ),
-    vjust = 0.5, size = 4) +
-  geom_text(aes(
-    x = Intercept_Upper_pct_change + 5,
-    y = factor(Var_kind, levels = Var_order),
-    label = significant
-    ),
-    vjust = 0.5, size = 4) +
-  scale_color_identity(guide = "none") + 
-  xlab("") +
-  #xlab(expression("Effect Size (%)")) +
-  theme_classic2() +
-  xlim(-100, 100) +
-  theme(
-    axis.title.x = element_text(size = 15),
-    axis.text.x = element_text(size = 15),
-    axis.title.y = element_blank(),
-    axis.text.y = element_text(size = 15),
-    strip.text = element_text(size = 15),
-    panel.border = element_rect(colour = "black", fill = NA, linewidth = 0.1)
-  )
+    geom_point(aes(
+      x = Intercept_pct_change,
+      y = Var_kind,
+      color = color_group
+    ), size = 5) +
+    geom_errorbarh(aes(
+        y = Var_kind,
+        xmin = Intercept_Lower_pct_change,
+        xmax = Intercept_Upper_pct_change,
+        color = color_group), 
+      height = 0.2, linewidth = 1.5) +
+    geom_vline(xintercept = 0, color = "black", size = 1, alpha = 0.4) +
+    geom_text(aes(
+      x = Intercept_Upper_pct_change + 25,
+      y = Var_kind,
+      label = paste0(n_obs, " (", n_study, ")")
+      ),
+      vjust = 0.5, size = 5) +
+    geom_text(aes(
+      x = Intercept_Upper_pct_change + 7,
+      y = Var_kind,
+      label = significant
+      ),
+      vjust = 0.5, size = 5) +
+    scale_color_identity(guide = "none") + 
+    xlab("") +
+    ggtitle(title) +
+    theme_classic2() +
+    xlim(-100, 100) +
+    theme(
+      axis.title.x = element_text(size = 18),
+      axis.text.x = element_text(size = 18),
+      axis.title.y = element_blank(),
+      axis.text.y = element_text(size = 18),
+      strip.text = element_text(size = 18),
+      panel.border = element_rect(colour = "black", fill = NA, linewidth = 0.1),
+      plot.title = element_text(size = 19, face = "bold")
+    )
 }
 
 ```
 
-```{r CC plot}
+```{r plot}
 #CC_SR
-p_CC_Climate_SR <- 
-  cat_graph(
-    plot_cat_summary %>% 
-      filter(Resp == "SR", Var == "Climate", Management == "Clearcut"), 
-    rev(c("Boreal", "Temperate", "Mediterranean", "Subtropical", "Tropical"))
-    )
+p1 <- 
+  plot_cat_summary %>%
+  filter(Management == "Clearcut", Resp == "SR") %>%
+  filter(Var != "Leaf_type") %>% 
+  cat_graph(title = "Clearcut") 
 
-p_CC_Forest_SR <- 
-  cat_graph(
-    plot_cat_summary %>% filter(Resp == "SR", Var == "Forest_type", Management == "Clearcut"), 
-    Var_order = rev(c("Broadleaf", "Needleleaf"))
-    )
-p_CC_Season_SR <- 
-  cat_graph(
-    plot_cat_summary %>% filter(Resp == "SR", Var == "Season", Management == "Clearcut"), 
-    Var_order = rev(c("Spring", "Summer", "Fall", "Winter"))
-    )
-p_CC_Severity_SR <- 
-  cat_graph(
-    plot_cat_summary %>% filter(Resp == "SR", Var == "Severity", Management == "Clearcut"), 
-    Var_order = rev(c("Stem", "WT", "WTS", "WTSC"))
-    )
-  
-p_CC_Residue_SR <- 
-  cat_graph(
-    plot_cat_summary %>% 
-      filter(Resp == "SR", Var == "Residue", Management == "Clearcut"), 
-    rev(c("Residue", "No residue"))
-    )
+#TH_SR
+p2 <- 
+  plot_cat_summary %>%
+  filter(Management == "Thinning", Resp == "SR") %>%
+  filter(Var != "Leaf_type") %>% 
+  cat_graph(title = "Thinning")
 
-# Turn off x-axis text and ticks for all but the last plot
-p_CC_Climate_SR  <- p_CC_Climate_SR + theme(axis.text.x = element_blank(),
-                                            axis.ticks.x = element_blank(),
-                                            axis.title.x = element_blank())
-p_CC_Forest_SR   <- p_CC_Forest_SR + theme(axis.text.x = element_blank(),
-                                           axis.ticks.x = element_blank(),
-                                           axis.title.x = element_blank())
-p_CC_Season_SR   <- p_CC_Season_SR + theme(axis.text.x = element_blank(),
-                                           axis.ticks.x = element_blank(),
-                                           axis.title.x = element_blank())
-p_CC_Severity_SR <- p_CC_Severity_SR + theme(axis.text.x = element_blank(),
-                                             axis.ticks.x = element_blank(),
-                                             axis.title.x = element_blank())
+#PB_SR
+p3 <- 
+  plot_cat_summary %>%
+  filter(Management == "Prescribed burn", Resp == "SR") %>%
+  cat_graph(title = "Prescribed burn")
 
-
-# Combine plots with different heights
-(p_CC_Climate_SR / 
- p_CC_Forest_SR / 
- p_CC_Season_SR / 
- p_CC_Severity_SR / 
- p_CC_Residue_SR) +
-  plot_layout(heights = c(1.5, .6, 1.2, 0.9, 0.6), guides = "collect")
-
-```
-
-
-
-```{r TH fig}
-# TH_SR
-p_TH_Climate_SR <- 
-  cat_graph(
-    plot_cat_summary %>% filter(Resp == "SR", Var == "Climate", Management == "Thinning"), 
-    Var_order = rev(c("Boreal", "Temperate", "Mediterranean", "Subtropical", "Tropical"))
-    )
-
-p_TH_Forest_SR <- 
-  cat_graph(
-    plot_cat_summary %>% filter(Resp == "SR", Var == "Forest_type", Management == "Thinning"), 
-    Var_order = rev(c("Broadleaf", "Needleleaf"))
-    )
-p_TH_Season_SR <- 
-  cat_graph(
-    plot_cat_summary %>% filter(Resp == "SR", Var == "Season", Management == "Thinning"), 
-    Var_order = rev(c("Spring", "Summer", "Fall", "Winter"))
-    )
-p_TH_Severity_SR <- 
-  cat_graph(
-    plot_cat_summary %>% filter(Resp == "SR", Var == "Severity", Management == "Thinning"), 
-    Var_order = rev(c("Low", "Moderate", "High"))
-    )
-
-p_TH_Residue_SR <- 
-  cat_graph(
-    plot_cat_summary %>% 
-      filter(Resp == "SR", Var == "Residue", Management == "Thinning"), 
-    rev(c("Residue", "No residue"))
-    )
-
-# Turn off x-axis text and ticks for all but the last plot
-p_TH_Climate_SR  <- p_TH_Climate_SR + theme(axis.text.x = element_blank(),
-                                            axis.ticks.x = element_blank(),
-                                            axis.title.x = element_blank())
-p_TH_Forest_SR   <- p_TH_Forest_SR + theme(axis.text.x = element_blank(),
-                                           axis.ticks.x = element_blank(),
-                                           axis.title.x = element_blank())
-p_TH_Season_SR   <- p_TH_Season_SR + theme(axis.text.x = element_blank(),
-                                           axis.ticks.x = element_blank(),
-                                           axis.title.x = element_blank())
-p_TH_Severity_SR <- p_TH_Severity_SR + theme(axis.text.x = element_blank(),
-                                             axis.ticks.x = element_blank(),
-                                             axis.title.x = element_blank())
-
-
-# Combine plots with different heights
-(p_TH_Climate_SR / 
- p_TH_Forest_SR / 
- p_TH_Season_SR / 
- p_TH_Severity_SR / 
- p_TH_Residue_SR) +
-  plot_layout(heights = c(.6, .6, 1.2, 0.9, 0.6), guides = "collect")
-```
-
-
-```{r PB plot}
-# PB_SR
-p_PB_Climate_SR <- 
-  cat_graph(
-    plot_cat_summary %>% filter(Resp == "SR", Var == "Climate", Management == "Prescribed burn"), 
-    Var_order = rev(c("Boreal", "Temperate", "Mediterranean", "Subtropical", "Tropical"))
-    )
-
-p_PB_Forest_SR <- 
-  cat_graph(
-    plot_cat_summary %>% filter(Resp == "SR", Var == "Forest_type", Management == "Prescribed burn"), 
-    Var_order = rev(c("Broadleaf", "Needleleaf"))
-    )
-
-p_PB_Season_SR <- 
-  cat_graph(
-    plot_cat_summary %>% filter(Resp == "SR", Var == "Season", Management == "Prescribed burn"), 
-    Var_order = rev(c("Spring", "Summer", "Fall", "Winter"))
-    )
-
-p_PB_Repeat_SR <- 
-  cat_graph(
-    plot_cat_summary %>% filter(Resp == "SR", Var == "Repeat", Management == "Prescribed burn"), 
-    Var_order = rev(c("Repeat", "Single"))
-    )
-
-
-# Turn off x-axis text and ticks for all but the last plot
-p_PB_Climate_SR  <- p_PB_Climate_SR + theme(axis.text.x = element_blank(),
-                                            axis.ticks.x = element_blank(),
-                                            axis.title.x = element_blank())
-p_PB_Forest_SR   <- p_PB_Forest_SR + theme(axis.text.x = element_blank(),
-                                           axis.ticks.x = element_blank(),
-                                           axis.title.x = element_blank())
-p_PB_Season_SR   <- p_PB_Season_SR + theme(axis.text.x = element_blank(),
-                                           axis.ticks.x = element_blank(),
-                                           axis.title.x = element_blank())
-
-
-# Combine plots with different heights
-(p_PB_Climate_SR / 
- p_PB_Forest_SR / 
- p_PB_Season_SR / 
- p_PB_Repeat_SR) +
-  plot_layout(heights = c(1.2, .6, 0.9, 0.6), guides = "collect")
-
-```
-
-```{r Rh & Ra}
-#CC
-p_CC_Forest_Rh <- 
-  cat_graph(
-    plot_cat_summary %>% filter(Resp == "Rh", Var == "Forest_type", Management == "Clearcut"), 
-    Var_order = rev(c("Broadleaf", "Needleleaf"))
-    )
-
-p_CC_Climate_Rh <- 
-  cat_graph(
-    plot_cat_summary %>% filter(Resp == "Rh", Var == "Climate", Management == "Clearcut"), 
-    Var_order = rev(c("Boreal", "Temperate", "Mediterranean", "Subtropical", "Tropical"))
-    )
-
-p_CC_Forest_Ra <- 
-  cat_graph(
-    plot_cat_summary %>% filter(Resp == "Ra", Var == "Forest_type", Management == "Clearcut"), 
-    Var_order = rev(c("Broadleaf", "Needleleaf"))
-    )
-
-p_CC_Climate_Ra <- 
-  cat_graph(
-    plot_cat_summary %>% filter(Resp == "Ra", Var == "Climate", Management == "Clearcut"), 
-    Var_order = rev(c("Boreal", "Temperate", "Mediterranean", "Subtropical", "Tropical"))
-    )
-
-# Turn off x-axis text and ticks for all but the last plot
-p_CC_Climate_Rh  <- p_CC_Climate_Rh + theme(axis.text.x = element_blank(),
-                                            axis.ticks.x = element_blank(),
-                                            axis.title.x = element_blank())
-p_CC_Forest_Rh   <- p_CC_Forest_Rh + theme(axis.text.x = element_blank(),
-                                           axis.ticks.x = element_blank(),
-                                           axis.title.x = element_blank())
-p_CC_Climate_Ra  <- p_CC_Climate_Ra + theme(axis.text.x = element_blank(),
-                                            axis.ticks.x = element_blank(),
-                                            axis.title.x = element_blank())
-
-# Combine plots with different heights
-(p_CC_Climate_Rh / 
- p_CC_Climate_Ra / 
- p_CC_Forest_Rh / 
- p_CC_Forest_Ra) +
-  plot_layout(guides = "collect")
-
-
-
-```
-
-
-```{r}
-# TH
-p_TH_Season_Rh <- 
-  cat_graph(
-    plot_cat_summary %>% filter(Resp == "Rh", Var == "Season", Management == "Thinning"), 
-    Var_order = rev(c("Spring", "Summer", "Fall", "Winter"))
-    )
-
-p_TH_Severity_Rh <- 
-  cat_graph(
-    plot_cat_summary %>% filter(Resp == "Rh", Var == "Severity", Management == "Thinning"), 
-    Var_order = rev(c("Low", "Moderate", "High"))
-    )
-p_TH_Severity_Ra <- 
-  cat_graph(
-    plot_cat_summary %>% filter(Resp == "Ra", Var == "Severity", Management == "Thinning"), 
-    Var_order = rev(c("Low", "Moderate", "High"))
-    )
-
-# Turn off x-axis text and ticks for all but the last plot
-
-p_TH_Season_Rh   <- p_TH_Season_Rh + theme(axis.text.x = element_blank(),
-                                           axis.ticks.x = element_blank(),
-                                           axis.title.x = element_blank())
-p_TH_Severity_Rh <- p_TH_Severity_Rh + theme(axis.text.x = element_blank(),
-                                             axis.ticks.x = element_blank(),
-                                             axis.title.x = element_blank())
-
-
-# Combine plots with different heights
-(p_TH_Season_Rh / 
- p_TH_Severity_Rh / 
- p_TH_Severity_Ra) +
-  plot_layout(heights = c(.6, .9, 0.9), guides = "collect")
-
+library(patchwork)
+p1 + p2 + p3
 ```
