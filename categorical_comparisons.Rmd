@@ -42,6 +42,27 @@ PB <- lit_effect %>% filter(Management_type == "Prescribed burn")
 TH <- lit_effect %>% filter(Management_type == "Thinning")
 ```
 
+```{r common var}
+# Define respiration components
+Resp_Components <- c("ln_SR", "ln_Rh", "ln_Ra")
+
+# season
+season <- c(Spring = "Spring", Summer = "Summer", Fall = "Fall", Winter = "Winter")
+levels(season) = c("Spring", "Summer", "Fall", "Winter")
+
+# forest type
+Forest <- c(Broadleaf = "Broadleaf", Needleleaf = "Needleleaf")
+
+# leaf type
+Leaf <- c(Deciduous = "Deciduous", Evergreen = "Evergreen", Mix = "Mixed") 
+
+# residue
+Residue_class <- c(Y = "Y", N = "N")
+
+# time since
+time_since_list <- c(Early = "Early", medium = "Medium", late = "Late")
+```
+
 ```{r CC cat comparison}
 ##############
 # Severity
@@ -50,9 +71,6 @@ CC_Resp_Severity <- list()
 
 # Define severity levels
 CC_Severity <- c(Stem = "S", WT = "WT", WTS = "WTS", WTSC = "WTSC")
-
-# Define respiration components
-Resp_Components <- c("ln_SR", "ln_Rh", "ln_Ra")
 
 # Run boot_lmer for each component and severity level
 for (resp in Resp_Components) {
@@ -91,9 +109,6 @@ TukeyHSD(CC_severity_SR)
 ##########
 CC_Resp_Season <- list()
 
-season <- c(Spring = "Spring", Summer = "Summer", Fall = "Fall", Winter = "Winter")
-levels(season) = c("Spring", "Summer", "Fall", "Winter")
-
 for (resp in Resp_Components) {
     for (var in names(season)) {
         group_name <- paste("CC", resp, var, sep = "_")
@@ -125,11 +140,7 @@ TukeyHSD(CC_season_SR)
 #########
 # Forest type ##
 ########
-
-
 CC_Resp_Forest <- list()
-
-Forest <- c(Broadleaf = "Broadleaf", Needleleaf = "Needleleaf")
 
 for (resp in Resp_Components) {
     for (var in names(Forest)) {
@@ -168,16 +179,10 @@ summary(CC_forest_Rh)
 CC_forest_Ra <- aov(ln_Ra ~ Forest_type, data = CC)
 summary(CC_forest_Ra) 
 
-
-
 #########
 # Leaf ##
 ########
-
-
 CC_Resp_Leaf <- list()
-
-Leaf <- c(Deciduous = "Deciduous", Evergreen = "Evergreen", Mix = "Mixed") 
 
 for (resp in Resp_Components) {
     for (var in names(Leaf)) {
@@ -271,7 +276,6 @@ TukeyHSD(CC_Climate_Ra)
 ### Residue
 ##############
 CC_Resp_Residue <- list()
-Residue_class <- c(Y = "Y", N = "N")
 
 # Run boot_lmer for each component and severity level
 for (resp in Resp_Components) {
@@ -302,12 +306,59 @@ CC_Resp_Residue_results <-
 
 CC_Residue_SR <- aov(ln_SR ~ Residue, data = CC)
 summary(CC_Residue_SR)
+TukeyHSD(CC_Residue_SR)
 
 CC_Residue_Rh <- aov(ln_Rh ~ Residue, data = CC)
 summary(CC_Residue_Rh)
 
 CC_Residue_Ra <- aov(ln_Ra ~ Residue, data = CC)
 summary(CC_Residue_Ra)
+
+######
+# timing
+########
+CC_resp_Time <- list() 
+
+CC_time <- CC %>% 
+  mutate(Time_since_cat = 
+           ifelse(Time_since <= 2, "Early", ifelse((Time_since > 2 & Time_since <= 5), "Medium", "Late")))
+
+# Run boot_lmer for each component and severity level
+for (resp in Resp_Components) {
+    for (var in names(time_since_list)) {
+        group_name <- paste("CC", resp, var, sep = "_")
+        CC_resp_Time[[group_name]] <- run_boot_lmer(
+            CC_time %>% filter(Time_since_cat == time_since_list[[var]]),
+            resp
+        )
+    }
+}
+
+# Bind and process results
+CC_resp_time_results <- 
+  bind_rows(CC_resp_Time, .id = "Group") %>% 
+  mutate(
+    var = word(Group, 3, sep = "_"),
+    Time = word(Group, -1, sep = "_")
+  ) %>% 
+  mutate(
+    across(Intercept:Intercept_Upper, 
+           ~ (exp(1)^(.) - 1) * 100,
+           .names = "{.col}_pct_change")
+  )
+
+write.csv(CC_resp_time_results, "G:/My Drive/Research/Projects/SR_meta_analysis/Data/cat_ind/CC_resp_time_result.csv", row.names = F)
+
+CC_time_SR <- aov(ln_SR ~ Time_since_cat, data = CC_time)
+summary(CC_time_SR)
+TukeyHSD(CC_time_SR)
+
+CC_time_Rh <- aov(ln_Rh ~ Time_since_cat, data = CC_time)
+summary(CC_time_Rh)
+
+CC_time_Ra <- aov(ln_Ra ~ Time_since_cat, data = CC_time)
+summary(CC_time_Ra)
+TukeyHSD(CC_time_Ra)
 ```
 
 ```{r TH cat comparison}
@@ -317,7 +368,7 @@ summary(CC_Residue_Ra)
 TH_Resp_Climate <- list()
 
 # Define severity levels
-TH_climate <- c(Temperate = "Temperate", Mediterranean = "Mediterranean", Subtropical = "Subtropical")
+TH_climate <- c(Temperate = "Temperate", Mediterranean = "Mediterranean", Subtropical = "Subtropical", Toropical = "Tropical")
 
 # Run boot_lmer for each component and severity level
 for (resp in Resp_Components) {
@@ -346,12 +397,16 @@ TH_Resp_Climate_results <-
 
 #write.csv(TH_Resp_Climate_results, "G:/My Drive/Research/Projects/SR_meta_analysis/Data/cat_ind/TH_Climate_result.csv", row.names = F)
 
-TH_Climate_SR <- aov(ln_SR ~ Climate_zone, data = TH %>% filter(Climate_zone %in% c("Temperate", "Mediterranean")))
+TH_Climate_SR <- aov(ln_SR ~ Climate_zone, data = TH)
 summary(TH_Climate_SR)
+TukeyHSD(TH_Climate_SR)
 
-TH_Climate_Rh <- aov(ln_Rh ~ Climate_zone, data = TH %>% filter(Climate_zone %in% c("Temperate", "Mediterranean")))
+TH_Climate_Rh <- aov(ln_Rh ~ Climate_zone, data = TH)
 summary(TH_Climate_Rh)
 
+TH_Climate_Ra <- aov(ln_Ra ~ Climate_zone, data = TH)
+summary(TH_Climate_Ra)
+TukeyHSD(TH_Climate_Ra)
 
 ##########
 # Season
@@ -386,40 +441,14 @@ TH_Resp_Season_results <-
 # ANOVA
 TH_season_SR <- aov(ln_SR ~ Season, data = TH %>% filter(Season != "NA"))
 summary(TH_season_SR) 
-TukeyHSD(TH_season_SR)
 
+TH_season_Rh <- aov(ln_Rh ~ Season, data = TH %>% filter(Season != "NA"))
+summary(TH_season_Rh) 
+TukeyHSD(TH_season_Rh)
 
-##########
-# REPEAT
-##########
-TH_Resp_Repeat <- list()
-
-Repeat_var <- c(Y = "Y", N = "N")
-
-for (resp in Resp_Components) {
-    for (var in names(Repeat_var)) {
-        group_name <- paste("TH", resp, var, sep = "_")
-        TH_Resp_Repeat[[group_name]] <- run_boot_lmer(
-            TH %>% filter(Repeat == Repeat_var[[var]]),
-            resp
-        )
-    }
-}
-
-# Bind and process results
-TH_Resp_Repeat_results <- 
-    bind_rows(TH_Resp_Repeat, .id = "Group") %>% 
-    mutate(
-        Resp = word(Group, 3, sep = "_"),
-        Repeat = word(Group, -1, sep = "_")
-    ) %>% 
-    mutate(
-        across(Intercept:Intercept_Upper, 
-               ~ (exp(1)^(.) - 1) * 100,
-               .names = "{.col}_pct_change")
-    )
-
-#write.csv(TH_Resp_Repeat_results, "G:/My Drive/Research/Projects/SR_meta_analysis/Data/cat_ind/TH_Resp_Repeat_result.csv", row.names = F)
+TH_season_Ra <- aov(ln_Ra ~ Season, data = TH %>% filter(Season != "NA"))
+summary(TH_season_Ra) 
+TukeyHSD(TH_season_Ra)
 
 ##########
 # Severity
@@ -427,8 +456,8 @@ TH_Resp_Repeat_results <-
 TH_Resp_Severity <- list()
 
 # Define severity levels
-TH_Severity <- c(High = "High", Moderate = "Moderate", Low = "Low")
-TH_Severity <- factor(TH_Severity, levels = c("High", "Moderate", "Low"))
+TH_Severity <- c(Low = "Low", Moderate = "Moderate", High = "High")
+TH_Severity <- factor(TH_Severity, levels = c("Low", "Moderate", "High"))
 
 # Run boot_lmer for each component and severity level
 for (resp in Resp_Components) {
@@ -460,11 +489,9 @@ TH_Resp_Severity_results <-
 # ANOVA
 TH_severity_SR <- aov(ln_SR ~ Severity_level, data = TH %>% filter(Severity_level != "NA"))
 summary(TH_severity_SR) 
-TukeyHSD(TH_severity_SR)
 
 TH_severity_Rh <- aov(ln_Rh ~ Severity_level, data = TH %>% filter(Severity_level != "NA"))
 summary(TH_severity_Rh) 
-TukeyHSD(TH_severity_Rh)
 
 TH_severity_Ra <- aov(ln_Ra ~ Severity_level, data = TH %>% filter(Severity_level != "NA"))
 summary(TH_severity_Ra) 
@@ -473,8 +500,6 @@ TukeyHSD(TH_severity_Ra)
 #########
 # Forest type ##
 ########
-
-
 TH_Resp_Forest <- list()
 
 for (resp in Resp_Components) {
@@ -503,17 +528,16 @@ TH_Resp_Forest_results <-
 
 #write.csv(TH_Resp_Forest_results, "G:/My Drive/Research/Projects/SR_meta_analysis/Data/cat_ind/TH_Resp_Forest_result.csv", row.names = F)
 
-
 TH_forest_SR <- aov(ln_SR ~ Forest_type, data = TH)
-summary(TH_forest_SR) 
-
+summary(TH_forest_SR)
+TukeyHSD(TH_forest_SR)
 
 #########
 # Leaf ##
 ########
 TH_Resp_Leaf <- list()
 
-TH_leaf = c(Deciduous = "Deciduous", Evergreen = "Evergreen")
+TH_leaf <- c(Deciduous = "Deciduous", Evergreen = "Evergreen")
 
 for (resp in Resp_Components) {
     for (var in names(TH_leaf)) {
@@ -541,7 +565,7 @@ TH_Resp_Leaf_results <-
 
 #write.csv(TH_Resp_Leaf_results, "G:/My Drive/Research/Projects/SR_meta_analysis/Data/cat_ind/TH_Resp_Leaf_result.csv", row.names = F)
 
-TH_Leaf_SR <- aov(ln_SR ~ Leaf_habit, data = TH %>% filter(Leaf_habit != "Mix"))
+TH_Leaf_SR <- aov(ln_SR ~ Leaf_habit, data = TH)
 summary(TH_Leaf_SR) 
 
 
@@ -577,41 +601,54 @@ TH_Resp_Residue_results <-
 
 #write.csv(TH_Resp_Residue_results, "G:/My Drive/Research/Projects/SR_meta_analysis/Data/cat_ind/TH_Residue_result.csv", row.names = F)
 
-
 TH_Residue_SR <- aov(ln_SR ~ Residue, data = TH %>% filter(Residue != "NA"))
 summary(TH_Residue_SR) 
-```
 
+# timing
+TH_resp_Time <- list() 
 
-```{r PB cat comparison}
-# Severity
-PB_Resp_Severity <- list()
+TH_time <- TH %>% 
+  mutate(Time_since_cat = 
+           ifelse(Time_since <= 2, "Early", ifelse((Time_since > 2 & Time_since <= 5), "Medium", "Late")))
 
 # Run boot_lmer for each component and severity level
 for (resp in Resp_Components) {
-    for (var in names(TH_Severity)) {
-        group_name <- paste("CC", resp, var, sep = "_")
-        PB_Resp_Severity[[group_name]] <- run_boot_lmer(
-            PB %>% filter(Severity_level == TH_Severity[[var]]),
+    for (var in names(time_since_list)) {
+        group_name <- paste("TH", resp, var, sep = "_")
+        TH_resp_Time[[group_name]] <- run_boot_lmer(
+            TH_time %>% filter(Time_since_cat == time_since_list[[var]]),
             resp
         )
     }
 }
 
 # Bind and process results
-PB_Resp_Severity_results <- 
-    bind_rows(PB_Resp_Severity, .id = "Group") %>% 
-    mutate(
-        Resp = word(Group, 3, sep = "_"),
-        Severity = word(Group, -1, sep = "_")
-    ) %>% 
-    mutate(
-        across(Intercept:Intercept_Upper, 
-               ~ (exp(1)^(.) - 1) * 100,
-               .names = "{.col}_pct_change")
-    )
+TH_resp_time_results <- 
+  bind_rows(TH_resp_Time, .id = "Group") %>% 
+  mutate(
+    var = word(Group, 3, sep = "_"),
+    Time = word(Group, -1, sep = "_")
+  ) %>% 
+  mutate(
+    across(Intercept:Intercept_Upper, 
+           ~ (exp(1)^(.) - 1) * 100,
+           .names = "{.col}_pct_change")
+  )
 
-#write.csv(PB_Resp_Severity_results, "G:/My Drive/Research/Projects/SR_meta_analysis/Data/cat_ind/PB_severity_result.csv", row.names = F)
+write.csv(TH_resp_time_results, "G:/My Drive/Research/Projects/SR_meta_analysis/Data/cat_ind/TH_resp_time_result.csv", row.names = F)
+
+TH_time_SR <- aov(ln_SR ~ Time_since_cat, data = TH_time)
+summary(TH_time_SR)
+
+TH_time_Rh <- aov(ln_Rh ~ Time_since_cat, data = TH_time)
+summary(TH_time_Rh)
+
+TH_time_Ra <- aov(ln_Ra ~ Time_since_cat, data = TH_time)
+summary(TH_time_Ra)
+```
+
+
+```{r PB cat comparison}
 
 ##########
 # Season
@@ -641,7 +678,7 @@ PB_Resp_Season_results <-
                .names = "{.col}_pct_change")
     )
 
-#write.csv(PB_Resp_Season_results, "G:/My Drive/Research/Projects/SR_meta_analysis/Data/cat_ind/PB_Resp_Season_result.csv", row.names = F)
+write.csv(PB_Resp_Season_results, "G:/My Drive/Research/Projects/SR_meta_analysis/Data/cat_ind/PB_Resp_Season_result.csv", row.names = F)
 
 PB_season_SR <- aov(ln_SR ~ Season, data = PB %>% filter(Season != "NA"))
 summary(PB_season_SR) 
@@ -676,7 +713,7 @@ PB_Resp_Forest_results <-
     ) %>% 
   mutate(Response = factor(Response, levels = c("ln_SR", "ln_Rh", "ln_Ra")))
 
-#write.csv(PB_Resp_Forest_results, "G:/My Drive/Research/Projects/SR_meta_analysis/Data/cat_ind/PB_Resp_Forest_result.csv", row.names = F)
+write.csv(PB_Resp_Forest_results, "G:/My Drive/Research/Projects/SR_meta_analysis/Data/cat_ind/PB_Resp_Forest_result.csv", row.names = F)
 
 # ANOVA
 PB_forest_SR <- aov(ln_SR ~ Forest_type, data = PB)
@@ -718,7 +755,7 @@ PB_Resp_Climate_results <-
     ) %>% 
   mutate(Response = factor(Response, levels = c("ln_SR", "ln_Rh", "ln_Ra")))
 
-#write.csv(PB_Resp_Climate_results, "G:/My Drive/Research/Projects/SR_meta_analysis/Data/cat_ind/PB_Climate_result.csv", row.names = F)
+write.csv(PB_Resp_Climate_results, "G:/My Drive/Research/Projects/SR_meta_analysis/Data/cat_ind/PB_Climate_result.csv", row.names = F)
 
 
 PB_Climate_SR <- aov(ln_SR ~ Climate_zone, data = PB)
@@ -759,11 +796,48 @@ PB_Resp_Repeat_results <-
     ) %>% 
   mutate(Response = factor(Response, levels = c("ln_SR", "ln_Rh", "ln_Ra")))
 
-#write.csv(PB_Resp_Repeat_results, "G:/My Drive/Research/Projects/SR_meta_analysis/Data/cat_ind/PB_Repeat_result.csv", row.names = F)
+write.csv(PB_Resp_Repeat_results, "G:/My Drive/Research/Projects/SR_meta_analysis/Data/cat_ind/PB_Repeat_result.csv", row.names = F)
 
 PB_Repeat_SR <- aov(ln_SR ~ Repeat, data = PB)
 summary(PB_Repeat_SR)
+TukeyHSD(PB_Repeat_SR)
 
+# timing
+
+PB_resp_Time <- list() 
+
+PB_time <- PB %>% 
+  mutate(Time_since_cat = 
+           ifelse(Time_since <= 2, "Early", ifelse((Time_since > 2 & Time_since <= 5), "Medium", "Late")))
+
+# Run boot_lmer for each component and severity level
+for (resp in Resp_Components) {
+    for (var in names(time_since_list)) {
+        group_name <- paste("PB", resp, var, sep = "_")
+        PB_resp_Time[[group_name]] <- run_boot_lmer(
+            PB_time %>% filter(Time_since_cat == time_since_list[[var]]),
+            resp
+        )
+    }
+}
+
+# Bind and process results
+PB_resp_time_results <- 
+  bind_rows(PB_resp_Time, .id = "Group") %>% 
+  mutate(
+    var = word(Group, 3, sep = "_"),
+    Time = word(Group, -1, sep = "_")
+  ) %>% 
+  mutate(
+    across(Intercept:Intercept_Upper, 
+           ~ (exp(1)^(.) - 1) * 100,
+           .names = "{.col}_pct_change")
+  )
+
+write.csv(PB_resp_time_results, "G:/My Drive/Research/Projects/SR_meta_analysis/Data/cat_ind/PB_resp_time_result.csv", row.names = F)
+
+PB_time_SR <- aov(ln_SR ~ Time_since_cat, data = PB_time)
+summary(PB_time_SR)
 ```
 
 
@@ -779,12 +853,11 @@ plot_cat_summary <-
      Intercept_Lower_pct_change < 0 & Intercept_Upper_pct_change < 0 ~ "red2",
      TRUE ~ "black")
  )
-
 ```
 
 
 ```{r graph function}
-cat_graph <- function(df, title){
+cat_graph <- function(df, title, xval){
   df$Var_kind <- factor(df$Var_kind, levels = rev(unique(df$Var_kind)))  # preserve order in df
   ggplot(df) +
     geom_point(aes(
@@ -815,18 +888,17 @@ cat_graph <- function(df, title){
     xlab("") +
     ggtitle(title) +
     theme_classic2() +
-    xlim(-100, 100) +
+    xlim(-1 * xval, xval) +
     theme(
       axis.title.x = element_text(size = 18),
       axis.text.x = element_text(size = 18),
       axis.title.y = element_blank(),
       axis.text.y = element_text(size = 18),
       strip.text = element_text(size = 18),
-      panel.border = element_rect(colour = "black", fill = NA, linewidth = 0.1),
+      #panel.border = element_rect(colour = "black", fill = NA, linewidth = 0.1),
       plot.title = element_text(size = 19, face = "bold")
     )
 }
-
 ```
 
 ```{r SR plot}
@@ -834,21 +906,22 @@ cat_graph <- function(df, title){
 p1 <- 
   plot_cat_summary %>%
   filter(Management == "Clearcut", Resp == "SR") %>%
-  filter(Var != "Leaf_type") %>% 
-  cat_graph(title = "Clearcut") 
+  filter(!Var %in% c("Leaf_type", "Season")) %>% 
+  cat_graph(title = "Clearcut", 75) 
 
 #TH_SR
 p2 <- 
   plot_cat_summary %>%
   filter(Management == "Thinning", Resp == "SR") %>%
-  filter(Var != "Leaf_type") %>% 
-  cat_graph(title = "Thinning")
+  filter(!Var %in% c("Leaf_type", "Season")) %>% 
+  cat_graph(title = "Thinning", 75)
 
 #PB_SR
 p3 <- 
   plot_cat_summary %>%
   filter(Management == "Prescribed burn", Resp == "SR") %>%
-  cat_graph(title = "Prescribed burn")
+  filter(!Var %in% c("Leaf_type", "Season")) %>%
+  cat_graph(title = "Prescribed burn", 75)
 
 library(patchwork)
 p1 + p2 + p3
@@ -859,31 +932,35 @@ p1 + p2 + p3
 p4 <- 
   plot_cat_summary %>%
   filter(Management == "Clearcut", Resp == "Rh") %>%
-  filter(Var == "Forest_type") %>% 
-  cat_graph(title = "Clearcut (Rh)") 
+  filter(Var %in% c("Forest_type", "Recovery")) %>%
+  cat_graph(title = "Clearcut", 65) 
 
 #CC_Ra
 p5 <- 
   plot_cat_summary %>%
   filter(Management == "Clearcut", Resp == "Ra") %>%
-  filter(Var == "Forest_type") %>% 
-  cat_graph(title = "Clearcut (Ra)") 
+  filter(Var %in% c("Forest_type", "Recovery")) %>%
+  cat_graph(title = "Clearcut", 100) 
 
 
 #TH_Rh
 p6 <- 
   plot_cat_summary %>%
   filter(Management == "Thinning", Resp == "Rh") %>%
-  filter(Var %in% c("Season", "Severity")) %>% 
-  cat_graph(title = "Thinning (Rh)") 
+  filter(Var %in% c("Severity","Recovery")) %>% 
+  cat_graph(title = "Thinning", 65) 
 
 # TH_Ra
 p7 <- 
   plot_cat_summary %>%
   filter(Management == "Thinning", Resp == "Ra") %>%
-  filter(Var %in% c("Severity")) %>% 
-  cat_graph(title = "Thinning (Ra)") 
+  filter(Var %in% c("Severity","Recovery")) %>% 
+  cat_graph(title = "Thinning", 100) 
 
 
-(p4 + p6) / (p5 + p7)
+
+# Rh
+(p4 + p6) 
+#Ra
+(p5 + p7)
 ```
