@@ -1,0 +1,399 @@
+---
+title: "cat_comparison_graph"
+author: "MOEKA"
+date: "2025-07-16"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(dplyr)
+library(forestplot)
+library(grid)
+```
+
+```{r read summary df}
+cat_summary <- read.csv("G:/My Drive/Research/Projects/SR_meta_analysis/Data/cat_summary.csv")
+
+cat_bg_summary <- read.csv("G:/My Drive/Research/Projects/SR_meta_analysis/Data/cat_biogeochem_summary.csv")
+```
+
+```{r function}
+plot_forest <- function(
+    data,                    # Your full data frame, e.g. plot_cat_summary
+    management,              # e.g. "Clearcut"
+    resp_vars,               # e.g. c("SR", "Rh")
+    var_groups,              # e.g. c("Climate", "Forest_type")
+    xlim = c(-70, 30),
+    xticks = seq(-70, 30, by = 10),
+    title = "Forest Plot"
+) {
+  
+  # Filter data by management and response variable(s)
+  plot_df <- data %>%
+    filter(Management == management) %>%
+    filter(n_obs > 3) %>%
+    filter(!is.na(Intercept)) %>% 
+    filter(Resp %in% resp_vars) %>%
+    filter(Var %in% var_groups)
+  
+  group_ids <- unique(plot_df$Var)
+  
+  # Build rows with bold group names and indented subgroups
+  plot_list <- lapply(group_ids, function(grp) {
+    sub_df <- filter(plot_df, Var == grp)
+    
+    # Bold group label using expression
+    group_row <- tibble(
+      Label = grp,
+      Sample = "",
+      Mean = NA_real_,
+      Lower = NA_real_,
+      Upper = NA_real_,
+      sig = NA_character_,
+      #color = NA_character_,
+      is_group = TRUE
+    )
+    
+    sub_rows <- sub_df %>%
+      mutate(
+        Label = paste0("  ", Var_kind),
+        Sample = paste0(n_obs, " (", n_study, ")"),
+        Mean = Intercept_pct_change,
+        Lower = Intercept_Lower_pct_change,
+        Upper = Intercept_Upper_pct_change,
+        sig = significant,
+        #color = color_group,
+        is_group = FALSE
+      ) %>%
+      select(Label, Sample, Mean, Lower, Upper, sig, is_group)
+    
+    bind_rows(group_row, sub_rows)
+  })
+  
+  plot_data <- bind_rows(plot_list)
+  
+  # Prepare table text; keep expressions for bold
+  tabletext <- rbind(
+    c("Category", "Sample size", "Significance"),
+    cbind(
+      as.character(plot_data$Label),
+      as.character(plot_data$Sample),
+      as.character(plot_data$sig)
+    )
+  )
+  
+  mean_vals <- c(NA, plot_data$Mean)
+  lower_vals <- c(NA, plot_data$Lower)
+  upper_vals <- c(NA, plot_data$Upper)
+  
+  # Color mapping (uniform color for now)
+  #col_fp <- fpColors(box = "black", lines = "black", zero = "gray50")
+  
+  # Horizontal lines at groups (offset by 1 for header row)
+  group_line_pos <- which(plot_data$is_group) + 1
+  hrzl_lines_list <- lapply(group_line_pos, function(pos) {
+    gpar(lwd = 1, col = "#CCCCCC")
+  })
+  names(hrzl_lines_list) <- as.character(group_line_pos)
+  
+  forestplot(
+    labeltext = tabletext,
+    mean = mean_vals,
+    lower = lower_vals,
+    upper = upper_vals,
+    graph.pos = 3,
+    zero = 0,
+    xlab = "Change Percentage (%)",
+    xlim = xlim,
+    xticks = xticks,
+    boxsize = 0.3,
+    txt_gp = fpTxtGp(
+      label = gpar(cex = 1.1),
+      ticks = gpar(cex = 1),
+      xlab = gpar(cex = 1.2),
+      title = gpar(cex = 1.3)
+    ),
+    #col = col_fp,
+    ci.vertices = TRUE,
+    ci.vertices.height = 0.2,
+    lineheight = "auto",
+    colgap = unit(6, "mm"),
+    lwd.ci = 2,
+    hrzl_lines = hrzl_lines_list,
+    title = title
+  )
+}
+
+```
+
+```{r SR graph}
+plot_forest(
+  data = cat_summary,
+  management = "Clearcut",
+  resp_vars = "SR",
+  xlim = c(-80, 40),
+  xticks = seq(-80, 40, by = 20),
+  var_groups = c("Climate", "Forest_type", "Recovery", "Residue", "Severity"),
+  title = "Effects of Clearcut on SR"
+)
+
+plot_forest(
+  data = cat_summary,
+  management = "Thinning",
+  resp_vars = "SR",
+  xlim = c(-40, 60),
+  xticks = seq(-40, 60, by = 20),
+  var_groups = c("Climate", "Forest_type", "Recovery", "Residue", "Severity"),
+  title = "Effects of Thinning on SR"
+)
+
+plot_forest(
+  data = cat_summary,
+  management = "Prescribed burn",
+  resp_vars = "SR",
+  xlim = c(-40, 20),
+  xticks = seq(-40, 20, by = 20),
+  var_groups = c("Climate", "Forest_type", "Repeat", "Recovery"),
+  title = "Effects of PB on SR"
+)
+```
+
+```{r Rh graph}
+
+plot_forest(
+  data = cat_summary,
+  management = "Clearcut",
+  resp_vars = "Rh",
+  xlim = c(-60, 80),
+  xticks = seq(-60, 80, by = 20),
+  var_groups = c("Climate", "Forest_type", "Recovery", "Residue"),
+  title = "Effects of Clearcut on Rh"
+)
+
+plot_forest(
+  data = cat_summary,
+  management = "Thinning",
+  resp_vars = "Rh",
+  xlim = c(-30, 40),
+  xticks = seq(-30, 40, by = 10),
+  var_groups = c("Severity", "Recovery"),
+  title = "Effects of Thinning on Rh"
+)
+```
+
+```{r Ra graph}
+plot_forest(
+  data = cat_summary,
+  management = "Clearcut",
+  resp_vars = "Ra",
+  xlim = c(-100, 50),
+  xticks = seq(-100, 50, by = 50),
+  var_groups = c("Climate", "Forest_type", "Recovery"),
+  title = "Effects of Clearcut on Ra"
+)
+
+plot_forest(
+  data = cat_summary,
+  management = "Thinning",
+  resp_vars = "Ra",
+  xlim = c(-30, 60),
+  xticks = seq(-30, 60, by = 10),
+  var_groups = c("Severity", "Recovery"),
+  title = "Effects of Thinning on Ra"
+)
+```
+
+```{r SOC graph}
+plot_forest(
+  data = cat_bg_summary,
+  management = "Clearcut",
+  resp_vars = "SOC",
+  xlim = c(-60, 80),
+  xticks = seq(-60, 80, by = 20),
+  var_groups = c("Climate", "Forest_type", "Residue", "Severity", "Recovery"),
+  title = "Effects of Clearcut on SOC"
+)
+
+plot_forest(
+  data = cat_bg_summary,
+  management = "Thinning",
+  resp_vars = "SOC",
+  xlim = c(-40, 60),
+  xticks = seq(-40, 60, by = 20),
+  var_groups = c("Climate", "Forest", "Severity", "Recovery"),
+  title = "Effects of Thinning on SOC"
+)
+```
+
+```{r TC graph}
+plot_forest(
+  data = cat_bg_summary,
+  management = "Clearcut",
+  resp_vars = "TC",
+  xlim = c(-20, 160),
+  xticks = seq(-20, 160, by = 20),
+  var_groups = c("Climate", "Forest", "Recovery"),
+  title = "Effects of Clearcut on TC"
+)
+
+plot_forest(
+  data = cat_bg_summary,
+  management = "Prescribed burn",
+  resp_vars = "TC",
+  xlim = c(-40, 60),
+  xticks = seq(-40, 60, by = 20),
+  var_groups = c("Forest", "Repeat"),
+  title = "Effects of PB on TC"
+)
+```
+
+```{r TN graph}
+plot_forest(
+  data = cat_bg_summary,
+  management = "Clearcut",
+  resp_vars = "TN",
+  xlim = c(-40, 200),
+  xticks = seq(-40, 200, by = 40),
+  var_groups = c("Climate", "Forest", "Recovery"),
+  title = "Effects of Clearcut on TN"
+)
+
+plot_forest(
+  data = cat_bg_summary,
+  management = "Thinning",
+  resp_vars = "TN",
+  xlim = c(-70, 90),
+  xticks = seq(-70, 90, by = 40),
+  var_groups = c("Climate", "Severity", "Recovery"),
+  title = "Effects of Thinning on TN"
+)
+
+plot_forest(
+  data = cat_bg_summary,
+  management = "Prescribed burn",
+  resp_vars = "TN",
+  xlim = c(-10, 30),
+  xticks = seq(-10, 30, by = 10),
+  var_groups = c("Forest", "Repeat"),
+  title = "Effects of PB on TN"
+)
+```
+
+```{r FRB graph}
+plot_forest(
+  data = cat_bg_summary,
+  management = "Clearcut",
+  resp_vars = "FRB",
+  xlim = c(-70, 70),
+  xticks = seq(-70, 70, by = 20),
+  var_groups = c("Climate", "Recovery"),
+  title = "Effects of Clearcut on FRB"
+)
+
+plot_forest(
+  data = cat_bg_summary,
+  management = "Thinning",
+  resp_vars = "FRB",
+  xlim = c(-60, 40),
+  xticks = seq(-60, 40, by = 10),
+  var_groups = c("Climate", "Severity", "Recovery"),
+  title = "Effects of Thinning on FRB"
+)
+```
+
+
+```{r LF graph}
+plot_forest(
+  data = cat_bg_summary,
+  management = "Clearcut",
+  resp_vars = "LF",
+  xlim = c(-100, 60),
+  xticks = seq(-100, 60, by = 20),
+  var_groups = c("Forest", "Recovery"),
+  title = "Effects of Clearcut on LF"
+)
+
+plot_forest(
+  data = cat_bg_summary,
+  management = "Thinning",
+  resp_vars = "LF",
+  xlim = c(-80, 40),
+  xticks = seq(-80, 40, by = 20),
+  var_groups = c("Recovery", "Severity"),
+  title = "Effects of Thinning on LF"
+)
+
+plot_forest(
+  data = cat_bg_summary,
+  management = "Prescribed burn",
+  resp_vars = "LF",
+  xlim = c(-40, 120),
+  xticks = seq(-40, 120, by = 40),
+  var_groups = "Repeat",
+  title = "Effects of PB on LF"
+)
+```
+
+```{r Ts graph}
+plot_forest(
+  data = cat_bg_summary,
+  management = "Clearcut",
+  resp_vars = "Ts",
+  xlim = c(-10, 100),
+  xticks = seq(-10, 100, by = 20),
+  var_groups = c("Climate", "Forest", "Recovery", "Residue", "Severity"),
+  title = "Effects of Clearcut on Ts"
+)
+
+plot_forest(
+  data = cat_bg_summary,
+  management = "Thinning",
+  resp_vars = "Ts",
+  xlim = c(-40, 120),
+  xticks = seq(-40, 120, by = 40),
+  var_groups = c("Climate", "Forest", "Recovery", "Residue", "Severity"),
+  title = "Effects of Thinning on Ts"
+)
+
+plot_forest(
+  data = cat_bg_summary,
+  management = "Prescribed burn",
+  resp_vars = "Ts",
+  xlim = c(0, 20),
+  xticks = seq(0, 20, by = 10),
+  var_groups = c("Forest", "Repeat"),
+  title = "Effects of PB on Ts"
+)
+```
+
+```{r SM graph}
+plot_forest(
+  data = cat_bg_summary,
+  management = "Clearcut",
+  resp_vars = "SM",
+  xlim = c(-60, 100),
+  xticks = seq(-60, 100, by = 20),
+  var_groups = c("Climate", "Forest", "Recovery", "Residue", "Severity"),
+  title = "Effects of Clearcut on SM"
+)
+
+plot_forest(
+  data = cat_bg_summary,
+  management = "Thinning",
+  resp_vars = "SM",
+  xlim = c(-20, 30),
+  xticks = seq(-30, 30, by = 20),
+  var_groups = c("Climate", "Forest", "Recovery", "Residue", "Severity"),
+  title = "Effects of Thinning on SM"
+)
+
+plot_forest(
+  data = cat_bg_summary,
+  management = "Prescribed burn",
+  resp_vars = "SM",
+  xlim = c(-20, 30),
+  xticks = seq(-20, 30, by = 10),
+  var_groups = c("Forest", "Repeat", "Recovery"),
+  title = "Effects of PB on SM"
+)
+```

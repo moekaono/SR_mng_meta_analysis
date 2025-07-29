@@ -52,7 +52,8 @@ summary(lit)
 lit %>% 
   select(where(is.numeric)) %>% 
   summarise(across(everything(), ~ sd(.x, na.rm = T))) %>% 
-  View()
+  select(Latitude:Time_since)
+
 ```
 
 
@@ -139,8 +140,7 @@ Mng_types <- list(CC = CC, PB = PB, TH = TH)
 Response_vars <- 
   lit_effect %>% 
   select(starts_with("ln_")) %>% 
-  colnames() %>%
-  setdiff(c("ln_Clay", "ln_Silt", "ln_Sand", "ln_DOC", "ln_DON"))  # only few studies reported these
+  colnames() 
 
 
 results_list <- list()
@@ -183,22 +183,33 @@ group_map <- c(
   "CN" = "Soil Environment",
   "FRB" = "Biomass",
   "CRB" = "Biomass",
-  "FRP" = "Biomass",
-  "CRP" = "Biomass",
+  #"FRP" = "Biomass",
+  #"CRP" = "Biomass",
   "AGB" = "Biomass",
-  "BGB" = "Biomass",
+  #"BGB" = "Biomass",
   "LAI" = "Biomass",
   "LF" = "Biomass",
   "FF" = "Biomass",
-  "MBC" = "Biomass",
-  "MBN" = "Biomass"
+  "MBC" = "Biomass"
+  #"MBN" = "Biomass"
 )
 
+# only selected vars
+summary_table_selected <- 
+  summary_table %>%
+  filter(!Response %in% c("ln_FRP", "ln_CRP", "ln_BGB", "ln_MBN", "ln_Clay", "ln_Silt", "ln_Sand", "ln_DOC", "ln_DON"))
+
 # Define factor levels to control y-axis order
-response_levels <- str_remove(rev(Response_vars), "^ln_")
+response_levels <- 
+  summary_table_selected %>%
+  distinct(Response) %>%
+  pull(Response) %>%          # extracts as a character vector
+  str_remove("^ln_") %>%      # removes "ln_" prefix
+  rev() 
 
 # Step 1: Clean and assign groups
-plot_df <- summary_table %>%
+plot_df <- 
+  summary_table_selected %>% 
   filter(n_study > 2) %>%
   mutate(
     Response_clean = str_remove(Response, "^ln_"),
@@ -206,7 +217,7 @@ plot_df <- summary_table %>%
       Intercept_Lower_pct_change > 0 & Intercept_Upper_pct_change > 0 ~ "royalblue",
       Intercept_Lower_pct_change < 0 & Intercept_Upper_pct_change < 0 ~ "red2",
       TRUE ~ "black"
-    ),
+    ), 
     background_group = group_map[Response_clean],
     background_group = ifelse(is.na(background_group), "Other", background_group),
     Response_clean = factor(Response_clean, levels = response_levels)
@@ -329,7 +340,7 @@ NA_ratios <-
   unnest(summary) %>% 
   arrange(Mng)
 
-#write.csv(NA_ratios, "G:/My Drive/Research/Projects/lit_review/Data/NA_ratios.csv", row.names = F)
+#write.csv(NA_ratios, "G:/My Drive/Research/Projects/SR_meta_analysis/Data/NA_ratios.csv", row.names = F)
 ```
 
 corr 
@@ -471,8 +482,11 @@ ggplot_templete <- function(data, var1, var2){
 ```
 
 ```{r corr every vars}
-env_var <- setdiff(Response_vars, vars)
-management_types <- c("CC", "PC", "PB", "TH")
+env_var <- 
+  setdiff(Response_vars, vars) %>% 
+  setdiff(., c("ln_Silt", "ln_Sand", "ln_Clay", "ln_FRP", "ln_CRP"))
+
+management_types <- c("CC", "PB", "TH")
 
 # CC
 plot_list_CC <- list()
@@ -530,6 +544,186 @@ for (i in seq_along(plot_chunks_TH)) {
 }
 ```
 
+
+```{r corr paper graph}
+theme_corr_template <-
+  theme(
+    axis.title.x = element_text(size = 15),
+    axis.text.x = element_text(size = 15),
+    axis.title.y = element_text(size = 15),
+    axis.text.y = element_text(size = 15),
+    panel.border = element_rect(colour = "black", fill = NA, linewidth = .5)
+    )
+
+
+p_CC_SR_Ts <- 
+  ggplot(CC, aes(ln_Ts, ln_SR)) + 
+  geom_hline(yintercept = 0, color = "black", size = 1, alpha = 0.4) +
+  geom_vline(xintercept = 0, color = "black", size = 1, alpha = 0.4) +
+  geom_point(aes(size = Wt), shape = 1) + 
+  geom_smooth(method = lm, se = TRUE) + 
+  stat_poly_eq(
+    use_label(c("eq", "R2", "P")),
+    size = 5,
+    parse = T,
+    label.x.npc = "left",    # "left", "center", "right" or 0–1
+    label.y.npc = "bottom",  # "top", "bottom", "center" or 0–1
+    ) +
+  theme_classic() +
+  guides(size = "none") +
+  xlab("lnRR(Ts)") + ylab("lnRR(SR)") +
+  theme_corr_template
+
+p_CC_SR_SM <- 
+  ggplot(CC, aes(ln_SM, ln_SR)) + 
+  geom_hline(yintercept = 0, color = "black", size = 1, alpha = 0.4) +
+  geom_vline(xintercept = 0, color = "black", size = 1, alpha = 0.4) +
+  geom_point(aes(size = Wt), shape = 1) + 
+  geom_smooth(method = lm, se = TRUE) + 
+  stat_poly_eq(
+    use_label(c("eq", "R2", "P")),
+    size = 5,
+    parse = T,
+    label.x.npc = "left",    # "left", "center", "right" or 0–1
+    label.y.npc = "bottom",  # "top", "bottom", "center" or 0–1
+    ) +
+  theme_classic() +
+  guides(size = "none") +
+  xlab("lnRR(SM)") + ylab("lnRR(SR)") +
+  theme_corr_template
+
+p_CC_SR_MBC <- 
+  ggplot(CC, aes(ln_MBC, ln_SR)) + 
+  geom_hline(yintercept = 0, color = "black", size = 1, alpha = 0.4) +
+  geom_vline(xintercept = 0, color = "black", size = 1, alpha = 0.4) +
+  geom_point(aes(size = Wt), shape = 1) + 
+  geom_smooth(method = lm, se = TRUE) + 
+  stat_poly_eq(
+    use_label(c("eq", "R2", "P")),
+    size = 5,
+    parse = T,
+    label.x.npc = "left",    # "left", "center", "right" or 0–1
+    label.y.npc = "bottom",  # "top", "bottom", "center" or 0–1
+    ) +
+  theme_classic() +
+  guides(size = "none") +
+  xlab("lnRR(MBC)") + ylab("lnRR(SR)") +
+  theme_corr_template
+
+
+## TH
+p_TH_SR_FF <- 
+  ggplot(TH, aes(ln_FF, ln_SR)) + 
+  geom_hline(yintercept = 0, color = "black", size = 1, alpha = 0.4) +
+  geom_vline(xintercept = 0, color = "black", size = 1, alpha = 0.4) +
+  geom_point(aes(size = Wt), shape = 1) + 
+  geom_smooth(method = lm, se = TRUE) + 
+  stat_poly_eq(
+    use_label(c("eq", "R2", "P")),
+    size = 5,
+    parse = T,
+    label.x.npc = "left",    # "left", "center", "right" or 0–1
+    label.y.npc = "top",  # "top", "bottom", "center" or 0–1
+    ) +
+  theme_classic() +
+  guides(size = "none") +
+  xlab("lnRR(FF)") + ylab("lnRR(SR)") +
+  theme_corr_template
+
+p_TH_Rh_MBC <- 
+  ggplot(TH, aes(ln_MBC, ln_Rh)) + 
+  geom_hline(yintercept = 0, color = "black", size = 1, alpha = 0.4) +
+  geom_vline(xintercept = 0, color = "black", size = 1, alpha = 0.4) +
+  geom_point(aes(size = Wt), shape = 1) + 
+  geom_smooth(method = lm, se = TRUE) + 
+  stat_poly_eq(
+    use_label(c("eq", "R2", "P")),
+    size = 5,
+    parse = T,
+    label.x.npc = "left",    # "left", "center", "right" or 0–1
+    label.y.npc = "top",  # "top", "bottom", "center" or 0–1
+    ) +
+  theme_classic() +
+  guides(size = "none") +
+  xlab("lnRR(MBC)") + ylab("lnRR(Rh)") +
+  theme_corr_template
+
+p_TH_Rh_LF <- 
+  ggplot(TH, aes(ln_LF, ln_Rh)) + 
+  geom_hline(yintercept = 0, color = "black", size = 1, alpha = 0.4) +
+  geom_vline(xintercept = 0, color = "black", size = 1, alpha = 0.4) +
+  geom_point(aes(size = Wt), shape = 1) + 
+  geom_smooth(method = lm, se = TRUE) + 
+  stat_poly_eq(
+    use_label(c("eq", "R2", "P")),
+    size = 5,
+    parse = T,
+    label.x.npc = "left",    # "left", "center", "right" or 0–1
+    label.y.npc = "bottom",  # "top", "bottom", "center" or 0–1
+    ) +
+  theme_classic() +
+  guides(size = "none") +
+  xlab("lnRR(LF)") + ylab("lnRR(Rh)") +
+  theme_corr_template
+
+p_TH_Ra_FRB <- 
+  ggplot(TH, aes(ln_FRB, ln_Ra)) + 
+  geom_hline(yintercept = 0, color = "black", size = 1, alpha = 0.4) +
+  geom_vline(xintercept = 0, color = "black", size = 1, alpha = 0.4) +
+  geom_point(aes(size = Wt), shape = 1) + 
+  geom_smooth(method = lm, se = TRUE) + 
+  stat_poly_eq(
+    use_label(c("eq", "R2", "P")),
+    size = 5,
+    parse = T,
+    label.x.npc = "left",    # "left", "center", "right" or 0–1
+    label.y.npc = "top",  # "top", "bottom", "center" or 0–1
+    ) +
+  theme_classic() +
+  guides(size = "none") +
+  xlab("lnRR(FRB)") + ylab("lnRR(Ra)") +
+  theme_corr_template
+
+# Define layout using `area()` — specify positions manually
+layout <- c(
+  area(1, 1, 1, 1),  # row 1, col 1
+  area(2, 1, 2, 1),  # row 2, col 1
+  area(3, 1, 3, 1),  # row 3, col 1
+  area(1, 2, 1, 2),  # row 1, col 2
+  area(2, 2, 2, 2),  # row 2, col 2
+  area(3, 2, 3, 2),  # row 3, col 2
+  area(4, 2, 4, 2)   # row 4, col 2 (extra row only in col 2)
+)
+
+# Combine plots
+(p_CC_SR_Ts + 
+ p_CC_SR_SM + 
+ p_CC_SR_MBC + 
+ p_TH_SR_FF + 
+ p_TH_Rh_MBC + 
+ p_TH_Rh_LF + 
+ p_TH_Ra_FRB) + 
+  plot_layout(design = layout)
+
+
+# suppliment
+ggplot(TH, aes(ln_FRB, ln_SR)) + 
+  geom_hline(yintercept = 0, color = "black", size = 1, alpha = 0.4) +
+  geom_vline(xintercept = 0, color = "black", size = 1, alpha = 0.4) +
+  geom_point(aes(size = Wt), shape = 1) + 
+  geom_smooth(method = lm, se = TRUE) + 
+  stat_poly_eq(
+    use_label(c("eq", "R2", "P")),
+    size = 5,
+    parse = T,
+    label.x.npc = "left",    # "left", "center", "right" or 0–1
+    label.y.npc = "top",  # "top", "bottom", "center" or 0–1
+    ) +
+  theme_classic() +
+  guides(size = "none") +
+  xlab("lnRR(FRB)") + ylab("lnRR(SR)") +
+  theme_corr_template
+```
 
 ```{r corr ind function}
 # Function to prepare plot
@@ -606,7 +800,7 @@ ggplot_responses <- function(data, predictor_var) {
 ```
 
 ```{r corr ind applicatoin}  
-corr_fig_dir <- "G:/My Drive/Research/Projects/lit_review/Fig/corr/"
+corr_fig_dir <- "G:/My Drive/Research/Projects/SR_meta_analysis/Fig/corr/"
 
 #CC 
 png(file = paste0(corr_fig_dir, "CC_lnTs.png"), width = 850, height = 640)
