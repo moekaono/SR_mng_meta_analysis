@@ -1,5 +1,61 @@
 
-biogeochem_var <- c("ln_TC", "ln_TN", "ln_LF", "ln_FF", "ln_FRB","ln_SOC", "ln_Ts", "ln_SM")
+biogeochem_var <- c("ln_TC", "ln_TN", "ln_LF", "ln_FF", "ln_FRB","ln_SOC", "ln_Ts", "ln_SM", "ln_LAI")
+
+###########
+### Management
+##############
+CC_bg_Mng <- list()
+
+CC_sub <- CC %>% mutate(sub_mng = ifelse(is.na(Sub_management) == T, "N", "Y"))
+
+CC_sub_mng <- c(Y = "Y", N = "N")
+
+for (var1 in biogeochem_var) {
+  for (var2 in names(CC_sub_mng)) {
+    group_name <- paste("CC", var1, var2, sep = "_")
+    CC_bg_Mng[[group_name]] <- run_boot_lmer(
+      CC_sub %>% filter(sub_mng == TH_sub_mng[[var2]]),
+      var1
+    )
+  }
+}
+
+# Bind and process results
+CC_bg_Mng_results <- 
+  bind_rows(CC_bg_Mng, .id = "Group") %>% 
+  mutate(
+    var = word(Group, 3, sep = "_"),
+    Climate = word(Group, -1, sep = "_")
+  ) %>% 
+  mutate(
+    across(Intercept:Intercept_Upper, 
+           ~ (exp(1)^(.) - 1) * 100,
+           .names = "{.col}_pct_change")
+  ) 
+
+write.csv(CC_bg_Mng_results, "G:/My Drive/Research/Projects/SR_meta_analysis/Data/cat_ind/CC_bg_sub_mng_result.csv", row.names = F)
+
+CC_mng_Ts <- aov(ln_Ts ~ sub_mng, data = CC_sub)
+summary(CC_mng_Ts)
+
+CC_mng_SM <- aov(ln_SM ~ sub_mng, data = CC_sub)
+summary(CC_mng_SM)
+
+CC_mng_TN <- aov(ln_TN ~ sub_mng, data = CC_sub)
+summary(CC_mng_TN)
+
+CC_mng_SOC <- aov(ln_SOC ~ sub_mng, data = CC_sub)
+summary(CC_mng_SOC)
+
+CC_mng_FF <- aov(ln_FF ~ sub_mng, data = CC_sub)
+summary(CC_mng_FF)
+
+CC_mng_LF <- aov(ln_LF ~ sub_mng, data = CC_sub)
+summary(CC_mng_LF)
+
+CC_mng_LAI <- aov(ln_LAI ~ sub_mng, data = CC_sub)
+summary(CC_mng_LAI)
+
 
 ###########
 ### Residue
@@ -108,7 +164,8 @@ CC_Climate_SM <- aov(ln_SM ~ Climate_zone, data = CC)
 summary(CC_Climate_SM)
 TukeyHSD(CC_Climate_SM)
 
-
+CC_Climate_LAI <- aov(ln_LAI ~ Climate_zone, data = CC)
+summary(CC_Climate_LAI)
 
 ###########
 ### Forest
@@ -267,9 +324,60 @@ TukeyHSD(CC_time_Ts)
 CC_time_SM <- aov(ln_SM ~ Time_since_cat, data = CC_time)
 summary(CC_time_SM)
 
+CC_time_LAI <- aov(ln_LAI ~ Time_since_cat, data = CC_time)
+summary(CC_time_LAI)
+TukeyHSD(CC_time_LAI)
+
 ################
 ### THINNING ###
 ################
+
+
+###########
+### Management
+##############
+TH_bg_Mng <- list()
+
+for (var1 in biogeochem_var) {
+  for (var2 in names(TH_sub_mng)) {
+    group_name <- paste("TH", var1, var2, sep = "_")
+    TH_bg_Mng[[group_name]] <- run_boot_lmer(
+      TH_sub %>% filter(sub_mng == TH_sub_mng[[var2]]),
+      var1
+    )
+  }
+}
+
+# Bind and process results
+TH_bg_Mng_results <- 
+  bind_rows(TH_bg_Mng, .id = "Group") %>% 
+  mutate(
+    var = word(Group, 3, sep = "_"),
+    Climate = word(Group, -1, sep = "_")
+  ) %>% 
+  mutate(
+    across(Intercept:Intercept_Upper, 
+           ~ (exp(1)^(.) - 1) * 100,
+           .names = "{.col}_pct_change")
+  ) 
+
+write.csv(TH_bg_Mng_results, "G:/My Drive/Research/Projects/SR_meta_analysis/Data/cat_ind/TH_bg_sub_mng_result.csv", row.names = F)
+
+TH_mng_Ts <- aov(ln_Ts ~ sub_mng, data = TH_sub)
+summary(TH_mng_Ts)
+
+TH_mng_SM <- aov(ln_SM ~ sub_mng, data = TH_sub)
+summary(TH_mng_SM)
+
+TH_mng_TN <- aov(ln_TN ~ sub_mng, data = TH_sub)
+summary(TH_mng_TN)
+
+TH_mng_FF <- aov(ln_FF ~ sub_mng, data = TH_sub)
+summary(TH_mng_FF)
+
+TH_mng_FRB <- aov(ln_FRB ~ sub_mng, data = TH_sub)
+summary(TH_mng_FRB)
+
 # Climate
 
 TH_biogeochem_Climate <- list()

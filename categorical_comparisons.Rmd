@@ -64,6 +64,50 @@ time_since_list <- c(Early = "Early", medium = "Medium", late = "Late")
 ```
 
 ```{r CC cat comparison}
+###########
+### Management
+##############
+CC_Resp_Mng <- list()
+
+CC_sub <- CC %>% mutate(sub_mng = ifelse(is.na(Sub_management) == T, "N", "Y"))
+
+CC_sub_mng <- c(Y = "Y", N = "N")
+
+for (resp in Resp_Components) {
+    for (var in names(CC_sub_mng)) {
+        group_name <- paste("CC", resp, var, sep = "_")
+        CC_Resp_Mng[[group_name]] <- run_boot_lmer(
+            CC_sub %>% filter(sub_mng == TH_sub_mng[[var]]),
+            resp
+        )
+    }
+}
+
+# Bind and process results
+CC_Resp_Mng_results <- 
+    bind_rows(CC_Resp_Mng, .id = "Group") %>% 
+    mutate(
+        Resp = word(Group, 3, sep = "_"),
+        Climate = word(Group, -1, sep = "_")
+    ) %>% 
+    mutate(
+        across(Intercept:Intercept_Upper, 
+               ~ (exp(1)^(.) - 1) * 100,
+               .names = "{.col}_pct_change")
+    ) %>% 
+  mutate(Response = factor(Response, levels = c("ln_SR", "ln_Rh", "ln_Ra")))
+
+write.csv(CC_Resp_Mng_results, "G:/My Drive/Research/Projects/SR_meta_analysis/Data/cat_ind/CC_sub_mng_result.csv", row.names = F)
+
+CC_mng_SR <- aov(ln_SR ~ sub_mng, data = CC_sub)
+summary(CC_mng_SR)
+
+CC_mng_Rh <- aov(ln_Rh ~ sub_mng, data = CC_sub)
+summary(CC_mng_Rh)
+
+CC_mng_Ra <- aov(ln_Ra ~ sub_mng, data = CC_sub)
+summary(CC_mng_Ra)
+
 ##############
 # Severity
 #############
@@ -363,6 +407,45 @@ TukeyHSD(CC_time_Ra)
 
 ```{r TH cat comparison}
 ###########
+### Management
+##############
+TH_Resp_Mng <- list()
+
+TH_sub <- TH %>% mutate(sub_mng = ifelse(is.na(Sub_management) == T, "N", "Y"))
+
+TH_sub_mng <- c(Y = "Y", N = "N")
+
+for (resp in Resp_Components) {
+    for (var in names(TH_sub_mng)) {
+        group_name <- paste("TH", resp, var, sep = "_")
+        TH_Resp_Mng[[group_name]] <- run_boot_lmer(
+            TH_sub %>% filter(sub_mng == TH_sub_mng[[var]]),
+            resp
+        )
+    }
+}
+
+# Bind and process results
+TH_Resp_Mng_results <- 
+    bind_rows(TH_Resp_Mng, .id = "Group") %>% 
+    mutate(
+        Resp = word(Group, 3, sep = "_"),
+        Climate = word(Group, -1, sep = "_")
+    ) %>% 
+    mutate(
+        across(Intercept:Intercept_Upper, 
+               ~ (exp(1)^(.) - 1) * 100,
+               .names = "{.col}_pct_change")
+    ) %>% 
+  mutate(Response = factor(Response, levels = c("ln_SR", "ln_Rh", "ln_Ra")))
+
+write.csv(TH_Resp_Mng_results, "G:/My Drive/Research/Projects/SR_meta_analysis/Data/cat_ind/TH_sub_mng_result.csv", row.names = F)
+
+TH_mng_SR <- aov(ln_SR ~ sub_mng, data = TH_sub)
+summary(TH_mng_SR)
+
+
+###########
 ### Climate
 ##############
 TH_Resp_Climate <- list()
@@ -647,7 +730,6 @@ TH_time_Ra <- aov(ln_Ra ~ Time_since_cat, data = TH_time)
 summary(TH_time_Ra)
 ```
 
-
 ```{r PB cat comparison}
 
 ##########
@@ -840,13 +922,12 @@ PB_time_SR <- aov(ln_SR ~ Time_since_cat, data = PB_time)
 summary(PB_time_SR)
 ```
 
-
 ```{r read summary df}
 cat_summary <- read.csv("G:/My Drive/Research/Projects/SR_meta_analysis/Data/cat_summary.csv")
 
 plot_cat_summary <- 
    cat_summary %>%
-   filter(n_study > 2) %>%
+   filter(n_study > 1) %>%
    mutate(
      color_group = case_when(
      Intercept_Lower_pct_change > 0 & Intercept_Upper_pct_change > 0 ~ "royalblue",

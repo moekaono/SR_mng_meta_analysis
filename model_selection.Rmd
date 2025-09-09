@@ -18,18 +18,22 @@ Check the NA values. ~40% as thresholds?
 ```{r model selection}
 
 prednames <- c("Latitude", "MAT", "MAP",
-               "Climate_zone", "Forest_type", #"Leaf_habit",
-               "Time_since", "Severity_level", "Season")
+               "Climate_zone", "Forest_type",
+               "Time_since", "Severity_level")
 
-# CC
-res_CC_SR <- 
-  glmulti(
-    "ln_SR", xr = c(prednames, "Residue"), 
-    data = CC %>% select(c(prednames, "Residue"), ln_SR) %>% mutate(across(where(~ !is.numeric(.)), as.factor)), 
-    level = 1,
-    crit = "aicc",
-    plotty = F
-    )
+res_CC_SR <- glmulti(
+  "ln_SR", 
+  xr = c(prednames, "Residue", "sub_mng"), 
+  data = CC_sub %>%
+    select(c(prednames, "Residue", "sub_mng", "ln_SR")) %>%
+    mutate(
+      across(where(is.numeric), scale),               # First: scale numeric variables
+      across(where(~ !is.numeric(.)), as.factor)      # Then: convert non-numeric to factors
+    ), 
+  level = 1,
+  crit = "aicc",
+  plotty = FALSE
+)
 plot(res_CC_SR, type = "s")
 
 res_CC_Rh <- 
@@ -55,27 +59,43 @@ res_CC_Ra <-
 plot(res_CC_Ra, type = "s")
 
 # PB - Rh and Ra are too small sample size
-res_PB_SR <- 
-  glmulti(
-    "ln_SR", xr = c(prednames, "Severity_level", "Repeat"), 
-    data = PB %>% select(all_of(c(prednames, "Severity_level", "Repeat")), ln_SR, Severity_level, Repeat) %>% mutate(across(where(~ !is.numeric(.)), as.factor)), 
-    level = 1,
-    crit = "aicc",
-    plotty = F
-    )
-  
+
+# Remove "Severity_level" from prednames
+prednames_no_severity <- setdiff(prednames, "Severity_level")
+
+res_PB_SR <- glmulti(
+  "ln_SR", 
+  xr = c(prednames_no_severity, "Repeat"), 
+  data = PB %>%
+    select(c(prednames_no_severity, "Repeat", "ln_SR")) %>%
+    mutate(
+      across(where(is.numeric), scale),               # First: scale numeric variables
+      across(where(~ !is.numeric(.)), as.factor)      # Then: convert non-numeric to factors
+    ), 
+  level = 1,
+  crit = "aicc",
+  plotty = FALSE
+)
+
 plot(res_PB_SR, type = "s")
 
 
+
+
 # TH
-res_TH_SR <- 
-  glmulti(
-    "ln_SR", xr = c(prednames, "Severity_level"), 
-    data = TH %>% select(all_of(c(prednames, "Severity_level")), ln_SR, Severity_level, Repeat) %>% mutate(across(where(~ !is.numeric(.)), as.factor)), 
-    level = 1,
-    crit = "aicc",
-    plotty = F
-    )
+res_TH_SR <- glmulti(
+  "ln_SR", 
+  xr = c(prednames, "sub_mng"), 
+  data = TH_sub %>%
+    select(c(prednames, "sub_mng", "ln_SR")) %>%
+    mutate(
+      across(where(is.numeric), scale),               # First: scale numeric variables
+      across(where(~ !is.numeric(.)), as.factor)      # Then: convert non-numeric to factors
+    ), 
+  level = 1,
+  crit = "aicc",
+  plotty = FALSE
+)
 
 plot(res_TH_SR, type = "s")
 

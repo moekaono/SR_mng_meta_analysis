@@ -17,7 +17,7 @@ REF: https://datavizpyr.com/how-to-make-world-map-with-ggplot2-in-r/#google_vign
 
 ```{r distribution of studies}
 lit_raw <- 
-  readxl::read_xlsx("G:/My Drive/Research/Projects/lit_review/Data/lit_review_2025.xlsx", sheet = "data_LRR")
+  readxl::read_xlsx("G:/My Drive/Research/Projects/lit_review/Data/lit_review_2025.xlsx", sheet = "data_raw")
   
 # create data for world coordinates using 
 # map_data() function
