@@ -1,0 +1,10 @@
+cff-version: 1.1.0
+message: "If you use this software, please cite it as below."
+authors:
+- family-names: "Ono"
+  given-names: "Moeka"
+  orcid: "https://orcid.org/0009-0004-2435-7044"
+title: "Software from: Impacts of harvesting and prescribed burning on forest soil dynamics: A global meta-analysis"
+version: 1.1.0
+date-released: 2025-09-16
+url: "https://github.com/moekaono/SR_meta_analysis"
