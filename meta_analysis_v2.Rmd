@@ -572,7 +572,8 @@ p_CC_SR_Ts <-
   theme_classic() +
   guides(size = "none") +
   xlab("lnRR(Ts)") + ylab("lnRR(SR)") +
-  theme_corr_template
+  theme_corr_template +
+  scale_y_continuous(labels = function(x) sub("-", "\u2212", x)) 
 
 p_CC_SR_SM <- 
   ggplot(CC, aes(ln_SM, ln_SR)) + 
@@ -590,7 +591,9 @@ p_CC_SR_SM <-
   theme_classic() +
   guides(size = "none") +
   xlab("lnRR(SM)") + ylab("lnRR(SR)") +
-  theme_corr_template
+  theme_corr_template +
+  scale_x_continuous(labels = function(x) sub("-", "\u2212", x)) +
+  scale_y_continuous(labels = function(x) sub("-", "\u2212", x)) 
 
 p_CC_SR_MBC <- 
   ggplot(CC, aes(ln_MBC, ln_SR)) + 
@@ -608,7 +611,9 @@ p_CC_SR_MBC <-
   theme_classic() +
   guides(size = "none") +
   xlab("lnRR(MBC)") + ylab("lnRR(SR)") +
-  theme_corr_template
+  theme_corr_template +
+  scale_x_continuous(labels = function(x) sub("-", "\u2212", x)) +
+  scale_y_continuous(labels = function(x) sub("-", "\u2212", x))
 
 
 ## TH
@@ -628,7 +633,9 @@ p_TH_SR_FF <-
   theme_classic() +
   guides(size = "none") +
   xlab("lnRR(FF)") + ylab("lnRR(SR)") +
-  theme_corr_template
+  theme_corr_template +
+  scale_x_continuous(labels = function(x) sub("-", "\u2212", x)) +
+  scale_y_continuous(labels = function(x) sub("-", "\u2212", x))
 
 p_TH_Rh_MBC <- 
   ggplot(TH, aes(ln_MBC, ln_Rh)) + 
@@ -646,7 +653,9 @@ p_TH_Rh_MBC <-
   theme_classic() +
   guides(size = "none") +
   xlab("lnRR(MBC)") + ylab("lnRR(Rh)") +
-  theme_corr_template
+  theme_corr_template +
+  scale_x_continuous(labels = function(x) sub("-", "\u2212", x)) +
+  scale_y_continuous(labels = function(x) sub("-", "\u2212", x))
 
 p_TH_Rh_LF <- 
   ggplot(TH, aes(ln_LF, ln_Rh)) + 
@@ -664,7 +673,9 @@ p_TH_Rh_LF <-
   theme_classic() +
   guides(size = "none") +
   xlab("lnRR(LF)") + ylab("lnRR(Rh)") +
-  theme_corr_template
+  theme_corr_template +
+  scale_x_continuous(labels = function(x) sub("-", "\u2212", x)) +
+  scale_y_continuous(labels = function(x) sub("-", "\u2212", x))
 
 p_TH_Ra_FRB <- 
   ggplot(TH, aes(ln_FRB, ln_Ra)) + 
@@ -682,7 +693,9 @@ p_TH_Ra_FRB <-
   theme_classic() +
   guides(size = "none") +
   xlab("lnRR(FRB)") + ylab("lnRR(Ra)") +
-  theme_corr_template
+  theme_corr_template +
+  scale_x_continuous(labels = function(x) sub("-", "\u2212", x)) +
+  scale_y_continuous(labels = function(x) sub("-", "\u2212", x))
 
 # Define layout using `area()` — specify positions manually
 layout <- c(

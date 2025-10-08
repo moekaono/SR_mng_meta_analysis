@@ -52,7 +52,9 @@ world_map + geom_point(
     legend.title = element_blank(),
     legend.text = element_text(size = 20), 
     legend.position = c(0.1, 0.4)
-    ) 
+    ) +
+  scale_x_continuous(labels = function(x) sub("-", "\u2212", x)) +
+  scale_y_continuous(labels = function(x) sub("-", "\u2212", x))
 
 ```
 

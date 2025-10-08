@@ -262,8 +262,8 @@ plot_forest(
   data = cat_bg_summary,
   management = "Thinning",
   resp_vars = "TN",
-  xlim = c(-70, 90),
-  xticks = seq(-70, 90, by = 40),
+  xlim = c(-80, 80),
+  xticks = seq(-80, 80, by = 40),
   var_groups = c("Climate", "Intensity", "Recovery", "Post management"),
   title = "Effects of Thinning on TN"
 )
@@ -285,7 +285,7 @@ plot_forest(
   management = "Clearcut",
   resp_vars = "FRB",
   xlim = c(-70, 70),
-  xticks = seq(-70, 70, by = 20),
+  xticks = seq(-70, 70, by = 35),
   var_groups = c("Climate", "Recovery"),
   title = "Effects of Clearcut on FRB"
 )
@@ -423,7 +423,7 @@ plot_forest(
   management = "Prescribed burn",
   resp_vars = "FF",
   xlim = c(-100, 0),
-  xticks = seq(-100, 0, by = 20),
+  xticks = seq(-100, 0, by = 50),
   var_groups = c("Repeat"),
   title = "Effects of PB on FF"
 )
